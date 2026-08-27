@@ -331,14 +331,11 @@ export class AcademicService {
       throw new AppError('Start date must be before end date.', 400, 'INVALID_DATE_RANGE');
     }
 
+    const derivedPrefix = (data.enrollmentPrefix && data.enrollmentPrefix.trim() !== '')
+      ? data.enrollmentPrefix.trim()
+      : (data.name.match(/\d{2,4}/)?.[0]?.slice(-2) || '26');
+
     if (data.isCurrent) {
-      if (!data.enrollmentPrefix || data.enrollmentPrefix.trim() === '') {
-        throw new AppError(
-          'Enrollment prefix is required before activating this academic year.',
-          400,
-          'ENROLLMENT_PREFIX_REQUIRED'
-        );
-      }
       await prisma.academicYear.updateMany({
         where: { isCurrent: true },
         data: { isCurrent: false, status: 'UPCOMING' },
@@ -352,8 +349,8 @@ export class AcademicService {
         endDate: end,
         isCurrent: data.isCurrent ?? false,
         status: data.isCurrent ? 'ACTIVE' : data.status || 'UPCOMING',
-        enrollmentPrefix: data.enrollmentPrefix ? data.enrollmentPrefix.trim() : null,
-        enrollmentSeqLength: data.enrollmentSeqLength || 4,
+        enrollmentPrefix: derivedPrefix,
+        enrollmentSeqLength: data.enrollmentSeqLength !== undefined ? Number(data.enrollmentSeqLength) : 4,
         nextEnrollmentSeq: 1,
       },
     });
@@ -458,6 +455,10 @@ export class AcademicService {
     actorId: string,
     ipAddress?: string
   ) {
+    if (!data.name || data.name.trim().length === 0) {
+      throw new AppError('Class name is required.', 400, 'INVALID_CLASS_NAME');
+    }
+
     const existingCode = await prisma.class.findUnique({ where: { code: data.code } });
     if (existingCode) {
       throw new AppError(`Class code '${data.code}' is already in use.`, 409, 'CLASS_CODE_EXISTS');
@@ -1114,6 +1115,10 @@ export class AcademicService {
     actorId: string,
     ipAddress?: string
   ) {
+    if (data.startTime >= data.endTime) {
+      throw new AppError('Slot start time must be earlier than end time.', 400, 'INVALID_SLOT_TIME');
+    }
+
     const existing = await prisma.timeSlot.findUnique({
       where: {
         academicYearId_dayOfWeek_periodNumber: {
@@ -1156,6 +1161,82 @@ export class AcademicService {
     return timeSlot;
   }
 
+  static async updateTimeSlot(
+    id: string,
+    data: {
+      name?: string;
+      startTime?: string;
+      endTime?: string;
+      isBreak?: boolean;
+    },
+    actorId: string,
+    ipAddress?: string
+  ) {
+    const existing = await prisma.timeSlot.findUnique({ where: { id } });
+    if (!existing) {
+      throw new AppError('Time slot not found.', 404, 'TIMESLOT_NOT_FOUND');
+    }
+
+    const startTime = data.startTime || existing.startTime;
+    const endTime = data.endTime || existing.endTime;
+    if (startTime >= endTime) {
+      throw new AppError('Slot start time must be earlier than end time.', 400, 'INVALID_SLOT_TIME');
+    }
+
+    const updated = await prisma.timeSlot.update({
+      where: { id },
+      data: {
+        name: data.name ?? existing.name,
+        startTime,
+        endTime,
+        isBreak: data.isBreak !== undefined ? data.isBreak : existing.isBreak,
+      },
+    });
+
+    await AuditService.log({
+      userId: actorId,
+      action: 'TIME_SLOT_UPDATED',
+      entityType: 'TimeSlot',
+      entityId: id,
+      beforeState: existing,
+      afterState: updated,
+      ipAddress,
+    });
+
+    return updated;
+  }
+
+  static async deleteTimeSlot(id: string, actorId: string, ipAddress?: string) {
+    const existing = await prisma.timeSlot.findUnique({
+      where: { id },
+      include: { _count: { select: { timetableEntries: true } } },
+    });
+    if (!existing) {
+      throw new AppError('Time slot not found.', 404, 'TIMESLOT_NOT_FOUND');
+    }
+
+    if (existing._count.timetableEntries > 0) {
+      throw new AppError(
+        'Cannot delete time slot with active assigned timetable lectures. Remove scheduled sessions first.',
+        400,
+        'SLOT_IN_USE'
+      );
+    }
+
+    await prisma.timeSlot.delete({ where: { id } });
+
+    await AuditService.log({
+      userId: actorId,
+      action: 'TIME_SLOT_DELETED',
+      entityType: 'TimeSlot',
+      entityId: id,
+      beforeState: existing,
+      ipAddress,
+    });
+
+    return { success: true, message: 'Time slot deleted successfully.' };
+  }
+
   static async generateDefaultTimeSlots(
     academicYearId: string,
     days: string[] = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'],
@@ -1165,11 +1246,13 @@ export class AcademicService {
       { periodNumber: 1, name: 'Period 1', startTime: '08:00', endTime: '08:45', isBreak: false },
       { periodNumber: 2, name: 'Period 2', startTime: '08:45', endTime: '09:30', isBreak: false },
       { periodNumber: 3, name: 'Period 3', startTime: '09:30', endTime: '10:15', isBreak: false },
-      { periodNumber: 4, name: 'Period 4', startTime: '10:30', endTime: '11:15', isBreak: false },
-      { periodNumber: 5, name: 'Period 5', startTime: '11:15', endTime: '12:00', isBreak: false },
-      { periodNumber: 6, name: 'Period 6', startTime: '12:45', endTime: '13:30', isBreak: false },
-      { periodNumber: 7, name: 'Period 7', startTime: '13:30', endTime: '14:15', isBreak: false },
-      { periodNumber: 8, name: 'Period 8', startTime: '14:15', endTime: '15:00', isBreak: false },
+      { periodNumber: 4, name: 'Short Break', startTime: '10:15', endTime: '10:30', isBreak: true },
+      { periodNumber: 5, name: 'Period 4', startTime: '10:30', endTime: '11:15', isBreak: false },
+      { periodNumber: 6, name: 'Period 5', startTime: '11:15', endTime: '12:00', isBreak: false },
+      { periodNumber: 7, name: 'Lunch Break', startTime: '12:00', endTime: '12:45', isBreak: true },
+      { periodNumber: 8, name: 'Period 6', startTime: '12:45', endTime: '13:30', isBreak: false },
+      { periodNumber: 9, name: 'Period 7', startTime: '13:30', endTime: '14:15', isBreak: false },
+      { periodNumber: 10, name: 'Period 8', startTime: '14:15', endTime: '15:00', isBreak: false },
     ];
 
     const results = [];
@@ -2328,27 +2411,19 @@ export class AcademicService {
 
     const result = await prisma.$transaction(async (tx) => {
       // 1. Permanent 5-digit Campus ID Sequential Generation (00001, 00002...)
-      let campusSeqSetting = await tx.systemSetting.findUnique({
-        where: { key: 'STUDENT_CAMPUS_ID_SEQUENCE' },
+      const allStudents = await tx.student.findMany({
+        select: { campusId: true },
       });
-      if (!campusSeqSetting) {
-        campusSeqSetting = await tx.systemSetting.create({
-          data: {
-            key: 'STUDENT_CAMPUS_ID_SEQUENCE',
-            value: '1',
-            category: 'SYSTEM',
-            description: 'Global atomic sequential counter for permanent 5-digit Student Campus IDs',
-          },
-        });
+      let maxCampusSeq = 0;
+      for (const s of allStudents) {
+        if (s.campusId) {
+          const num = parseInt(s.campusId, 10);
+          if (!isNaN(num) && num > maxCampusSeq) {
+            maxCampusSeq = num;
+          }
+        }
       }
-      const currentCampusSeq = parseInt(campusSeqSetting.value, 10) || 1;
-      const campusId = String(currentCampusSeq).padStart(5, '0');
-
-      // Increment sequence atomically for the next student
-      await tx.systemSetting.update({
-        where: { key: 'STUDENT_CAMPUS_ID_SEQUENCE' },
-        data: { value: String(currentCampusSeq + 1) },
-      });
+      const campusId = String(maxCampusSeq + 1).padStart(5, '0');
 
       // 2. Academic Year Enrollment Number Generation (<Prefix><Sequence>)
       const targetYear = await tx.academicYear.findUnique({ where: { id: academicYearId } });
@@ -2468,7 +2543,7 @@ export class AcademicService {
           toSectionId: section.id,
           toStatus: StudentStatusEnum.ACTIVE,
           transferType: 'PROMOTION',
-          reason: 'Initial intake enrollment & section allocation.',
+          reason: 'Initial enrollment & section allocation.',
           transferredByUserId: validActor ? validActor.id : null,
         },
       });

@@ -5,6 +5,7 @@ interface BadgeProps {
   variant?: 'primary' | 'secondary' | 'danger' | 'success' | 'warning' | 'info' | 'default';
   size?: 'sm' | 'md';
   dot?: boolean;
+  className?: string;
 }
 
 export const Badge: React.FC<BadgeProps> = ({
@@ -12,6 +13,7 @@ export const Badge: React.FC<BadgeProps> = ({
   variant = 'secondary',
   size = 'md',
   dot = false,
+  className = '',
 }) => {
   const variantStyles = {
     primary: 'bg-brand-50 text-brand-700 border-brand-200',
@@ -40,7 +42,7 @@ export const Badge: React.FC<BadgeProps> = ({
 
   return (
     <span
-      className={`inline-flex items-center gap-1.5 font-semibold rounded-full border ${variantStyles[variant]} ${sizeStyles[size]}`}
+      className={`inline-flex items-center gap-1.5 font-semibold rounded-full border ${variantStyles[variant]} ${sizeStyles[size]} ${className}`}
     >
       {dot && <span className={`w-1.5 h-1.5 rounded-full ${dotColors[variant]}`} />}
       <span>{children}</span>

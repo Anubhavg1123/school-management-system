@@ -5,6 +5,7 @@ const zod_1 = require("zod");
 const registration_service_1 = require("../services/registration.service");
 const response_1 = require("../utils/response");
 exports.approveRegistrationSchema = zod_1.z.object({
+    role: zod_1.z.string().optional(),
     departmentId: zod_1.z.string().optional(),
     employeeOrAdmissionCode: zod_1.z.string().optional(),
     designation: zod_1.z.string().optional(),
@@ -80,6 +81,7 @@ class RegistrationController {
             const result = await registration_service_1.RegistrationService.approveRegistration({
                 id,
                 reviewerId: req.user.id,
+                role: req.body.role,
                 departmentId: req.body.departmentId,
                 employeeOrAdmissionCode: req.body.employeeOrAdmissionCode,
                 designation: req.body.designation,

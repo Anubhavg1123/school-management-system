@@ -49,11 +49,65 @@ class OfficeService {
         if (existingUser) {
             throw new errorHandler_1.AppError(`User with email '${payload.email}' already exists.`, 409);
         }
-        // Auto-generate unique admission number if omitted
-        const admissionNumber = payload.admissionNumber || `ADM-${Date.now()}`;
-        const enrollmentNumber = payload.enrollmentNumber || `ENR-${Date.now()}`;
         // Create user & student in database transaction
         const student = await prisma_1.prisma.$transaction(async (tx) => {
+            // 1. Generate permanent 5-digit sequential Campus ID (e.g. 00001, 00002, 00003...)
+            const allStudents = await tx.student.findMany({
+                select: { campusId: true },
+            });
+            let maxCampusSeq = 0;
+            for (const s of allStudents) {
+                if (s.campusId) {
+                    const num = parseInt(s.campusId, 10);
+                    if (!isNaN(num) && num > maxCampusSeq) {
+                        maxCampusSeq = num;
+                    }
+                }
+            }
+            const nextCampusSeq = maxCampusSeq + 1;
+            const campusId = String(nextCampusSeq).padStart(5, '0');
+            // 2. Resolve Academic Year and generate Academic Enrollment Number
+            let academicYearId = payload.academicYearId;
+            if (!academicYearId && payload.sectionId) {
+                const sec = await tx.section.findUnique({
+                    where: { id: payload.sectionId },
+                    include: { class: true },
+                });
+                if (sec?.class?.academicYearId) {
+                    academicYearId = sec.class.academicYearId;
+                }
+            }
+            let enrollmentNumber = payload.enrollmentNumber;
+            if (!enrollmentNumber && academicYearId) {
+                const ay = await tx.academicYear.findUnique({ where: { id: academicYearId } });
+                if (ay) {
+                    const prefix = ay.enrollmentPrefix || '26';
+                    const seqLen = ay.enrollmentSeqLength || 4;
+                    const seq = ay.nextEnrollmentSeq || 1;
+                    enrollmentNumber = `${prefix}${String(seq).padStart(seqLen, '0')}`;
+                    await tx.academicYear.update({
+                        where: { id: academicYearId },
+                        data: { nextEnrollmentSeq: seq + 1 },
+                    });
+                }
+            }
+            if (!enrollmentNumber) {
+                enrollmentNumber = `ENR-${campusId}`;
+            }
+            let finalAdmissionNumber = payload.admissionNumber || `ADM-${campusId}`;
+            let admExisting = await tx.student.findUnique({ where: { admissionNumber: finalAdmissionNumber } });
+            let admSuffix = 1;
+            while (admExisting) {
+                finalAdmissionNumber = `ADM-${campusId}-${admSuffix++}`;
+                admExisting = await tx.student.findUnique({ where: { admissionNumber: finalAdmissionNumber } });
+            }
+            let finalEnrollmentNumber = enrollmentNumber;
+            let enrExisting = await tx.student.findUnique({ where: { enrollmentNumber: finalEnrollmentNumber } });
+            let enrSuffix = 1;
+            while (enrExisting) {
+                finalEnrollmentNumber = `${enrollmentNumber}-${enrSuffix++}`;
+                enrExisting = await tx.student.findUnique({ where: { enrollmentNumber: finalEnrollmentNumber } });
+            }
             const user = await tx.user.create({
                 data: {
                     email: payload.email,
@@ -69,11 +123,12 @@ class OfficeService {
             const std = await tx.student.create({
                 data: {
                     userId: user.id,
-                    admissionNumber,
-                    enrollmentNumber,
+                    campusId,
+                    admissionNumber: finalAdmissionNumber,
+                    enrollmentNumber: finalEnrollmentNumber,
                     sectionId: payload.sectionId,
                     departmentId: payload.departmentId || null,
-                    academicYearId: payload.academicYearId || null,
+                    academicYearId: academicYearId || null,
                     status: 'ACTIVE',
                     guardians: {
                         create: [
@@ -101,7 +156,7 @@ class OfficeService {
                 action: 'STUDENT_MASTER_CREATED',
                 entityType: 'Student',
                 entityId: student.id,
-                afterState: JSON.stringify({ admissionNumber: student.admissionNumber, email: payload.email }),
+                afterState: JSON.stringify({ campusId: student.campusId, admissionNumber: student.admissionNumber, enrollmentNumber: student.enrollmentNumber, email: payload.email }),
             },
         });
         return student;

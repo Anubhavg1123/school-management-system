@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.StudentAttendanceController = exports.reviewAcademicBypassSchema = exports.academicBypassSchema = exports.reviewStudentCorrectionSchema = exports.studentCorrectionSchema = exports.submitStudentAttendanceSchema = exports.createExtraClassSlotSchema = exports.generateSlotsSchema = void 0;
+exports.StudentAttendanceController = exports.reviewAcademicBypassSchema = exports.academicBypassSchema = exports.applySchoolActivityBypassSchema = exports.reviewStudentCorrectionSchema = exports.studentCorrectionSchema = exports.submitStudentAttendanceSchema = exports.createExtraClassSlotSchema = exports.generateSlotsSchema = void 0;
 const zod_1 = require("zod");
 const student_attendance_service_1 = require("../services/student-attendance.service");
 const response_1 = require("../utils/response");
@@ -15,19 +15,33 @@ exports.submitStudentAttendanceSchema = zod_1.z.object({
     slotId: zod_1.z.string().min(1, 'Attendance Slot ID is required'),
     studentRecords: zod_1.z.array(zod_1.z.object({
         studentId: zod_1.z.string().min(1, 'Student ID is required'),
-        status: zod_1.z.enum(['PRESENT', 'ABSENT', 'LATE', 'EXCUSED', 'ACADEMIC_BYPASS']),
+        status: zod_1.z.enum(['PRESENT', 'ABSENT']),
         remarks: zod_1.z.string().optional(),
     })).min(1, 'At least one student record is required'),
     isFinalize: zod_1.z.boolean().optional(),
 });
 exports.studentCorrectionSchema = zod_1.z.object({
     studentAttendanceId: zod_1.z.string().min(1, 'Student Attendance ID is required'),
-    proposedStatus: zod_1.z.enum(['PRESENT', 'ABSENT', 'LATE', 'EXCUSED', 'ACADEMIC_BYPASS']),
+    proposedStatus: zod_1.z.enum(['PRESENT', 'ABSENT', 'ACADEMIC_BYPASS']),
     reason: zod_1.z.string().min(5, 'Reason must be at least 5 characters long'),
 });
 exports.reviewStudentCorrectionSchema = zod_1.z.object({
     action: zod_1.z.enum(['APPROVED', 'REJECTED']),
     reviewNotes: zod_1.z.string().optional(),
+});
+exports.applySchoolActivityBypassSchema = zod_1.z.object({
+    studentId: zod_1.z.string().min(1, 'Student ID is required'),
+    attendanceSlotId: zod_1.z.string().optional(),
+    date: zod_1.z.string().min(1, 'Date is required'),
+    activityType: zod_1.z.enum([
+        'SPORTS',
+        'ACADEMIC_EVENT',
+        'SCHOOL_EVENT',
+        'COMPETITION',
+        'OFFICIAL_SCHOOL_ACTIVITY',
+        'OTHER_SCHOOL_APPROVED_ACTIVITY',
+    ]),
+    reason: zod_1.z.string().min(5, 'Reason must be at least 5 characters'),
 });
 exports.academicBypassSchema = zod_1.z.object({
     studentId: zod_1.z.string().min(1, 'Student ID is required'),
@@ -145,6 +159,27 @@ class StudentAttendanceController {
                 reviewNotes: req.body.reviewNotes,
             }, req.user.id, req.user.activeRole, req.user.departmentId || undefined, typeof ipAddress === 'string' ? ipAddress : undefined);
             return (0, response_1.sendSuccess)(res, result, 200);
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    // Apply school activity / academic bypass (Class Coordinator or Higher Admin)
+    static async applyBypass(req, res, next) {
+        try {
+            const ipAddress = req.ip || req.socket.remoteAddress;
+            const result = await student_attendance_service_1.StudentAttendanceService.applySchoolActivityBypass({
+                studentId: req.body.studentId,
+                attendanceSlotId: req.body.attendanceSlotId,
+                date: req.body.date,
+                activityType: req.body.activityType,
+                reason: req.body.reason,
+            }, {
+                id: req.user.id,
+                activeRole: req.user.activeRole,
+                departmentId: req.user.departmentId || undefined,
+            }, typeof ipAddress === 'string' ? ipAddress : undefined);
+            return (0, response_1.sendSuccess)(res, result, 201);
         }
         catch (error) {
             next(error);

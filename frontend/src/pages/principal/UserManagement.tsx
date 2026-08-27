@@ -344,23 +344,12 @@ export const UserManagement: React.FC = () => {
                     { value: 'OTHER_NON_FACULTY', label: 'Other Non-Faculty' },
                   ]}
                 />
-              ) : selectedRole === 'FACULTY' ? (
-                <Select
-                  label="Assign Academic Department *"
-                  required
-                  value={selectedDeptId}
-                  onChange={(e) => setSelectedDeptId(e.target.value)}
-                  options={[
-                    { value: '', label: 'Select Department' },
-                    ...departments.map((d) => ({ value: d.id, label: `${d.name} (${d.code})` })),
-                  ]}
-                />
               ) : (
                 <Input
-                  label="Designation / Title"
+                  label="Designation / Job Title"
                   value={selectedDesignation}
                   onChange={(e) => setSelectedDesignation(e.target.value)}
-                  placeholder="e.g. Office Administrator"
+                  placeholder={selectedRole === 'FACULTY' ? 'e.g. Mathematics Teacher / Class Teacher' : 'e.g. Office Administrator'}
                 />
               )}
             </div>
@@ -372,14 +361,6 @@ export const UserManagement: React.FC = () => {
                 onChange={(e) => setSelectedCode(e.target.value)}
                 placeholder="e.g. EMP-1002"
               />
-              {selectedRole === 'FACULTY' && (
-                <Input
-                  label="Academic Designation"
-                  value={selectedDesignation}
-                  onChange={(e) => setSelectedDesignation(e.target.value)}
-                  placeholder="e.g. Asst. Professor"
-                />
-              )}
             </div>
           </div>
 

@@ -60,6 +60,14 @@ export const TimetableManagement: React.FC = () => {
   const [timeSlots, setTimeSlots] = useState<TimeSlot[]>([]);
   const [subjects, setSubjects] = useState<Subject[]>([]);
 
+  // Flexible Custom Time Slot Modal
+  const [isSlotModalOpen, setIsSlotModalOpen] = useState(false);
+  const [slotDay, setSlotDay] = useState<string>('ALL');
+  const [slotName, setSlotName] = useState('Period 1');
+  const [slotStartTime, setSlotStartTime] = useState('08:30');
+  const [slotEndTime, setSlotEndTime] = useState('09:30');
+  const [slotIsBreak, setSlotIsBreak] = useState(false);
+
   // Timetable Entries & Extra Classes
   const [timetableEntries, setTimetableEntries] = useState<TimetableEntry[]>([]);
   const [extraClasses, setExtraClasses] = useState<ExtraClassRequest[]>([]);
@@ -227,37 +235,54 @@ export const TimetableManagement: React.FC = () => {
     }
   };
 
-  const handleGenerateDaily8PeriodGrid = async (forceRegenerate: boolean = false) => {
+  const handleCreateCustomSlot = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!selectedYearId) {
       setError('Please select an Academic Year first.');
       return;
     }
-    if (!selectedClassId) {
-      setError('Please select a Class / Grade first.');
+    if (slotStartTime >= slotEndTime) {
+      setError('Slot Start Time must be earlier than End Time.');
       return;
     }
-    if (!selectedSectionId) {
-      setError('Please select a Section first.');
-      return;
-    }
-
     try {
       setLoading(true);
       setError(null);
-      const res = await academicApi.generateTimetableGrid({
-        academicYearId: selectedYearId,
-        classId: selectedClassId,
-        sectionId: selectedSectionId,
-        forceRegenerate,
-      });
+      const daysToCreate = slotDay === 'ALL' ? DAYS : [slotDay as DayOfWeekEnum];
+      for (const d of daysToCreate) {
+        const daySlots = timeSlots.filter((s) => s.dayOfWeek === d);
+        const nextPeriod = daySlots.length > 0 ? Math.max(...daySlots.map((s) => s.periodNumber)) + 1 : 1;
+        await academicApi.createTimeSlot({
+          academicYearId: selectedYearId,
+          dayOfWeek: d,
+          periodNumber: nextPeriod,
+          name: slotName,
+          startTime: slotStartTime,
+          endTime: slotEndTime,
+          isBreak: slotIsBreak,
+        });
+      }
+      setSuccessMsg(`Time slot '${slotName}' (${slotStartTime} - ${slotEndTime}) created successfully.`);
+      setIsSlotModalOpen(false);
+      await fetchTimeSlots();
+    } catch (err: any) {
+      setError(err.response?.data?.error?.message || 'Failed to create custom time slot.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  const handleDeleteSlot = async (slotId: string) => {
+    if (!window.confirm('Are you sure you want to delete this time slot?')) return;
+    try {
+      setLoading(true);
+      const res = await academicApi.deleteTimeSlot(slotId);
       if (res.success) {
-        setSuccessMsg(res.data?.message || 'Daily 8-period timetable grid generated and saved in database.');
+        setSuccessMsg('Time slot deleted successfully.');
         await fetchTimeSlots();
-        await fetchTimetable();
       }
     } catch (err: any) {
-      setError(err.response?.data?.error?.message || 'Failed to generate timetable grid.');
+      setError(err.response?.data?.error?.message || 'Failed to delete time slot.');
     } finally {
       setLoading(false);
     }
@@ -421,10 +446,10 @@ export const TimetableManagement: React.FC = () => {
     }
   };
 
-  // Group unique periods from Monday slots (to form table header)
-  const mondaySlots = timeSlots
-    .filter((s) => s.dayOfWeek === 'MONDAY')
-    .sort((a, b) => a.periodNumber - b.periodNumber);
+  // Group unique periods from all configured slots (ordered by start time)
+  const uniqueTimeSlots = Array.from(
+    new Map(timeSlots.map((s) => [`${s.startTime}-${s.endTime}`, s])).values()
+  ).sort((a, b) => a.startTime.localeCompare(b.startTime));
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-6">
@@ -436,18 +461,18 @@ export const TimetableManagement: React.FC = () => {
             Institutional Timetable & Scheduling
           </h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            5-Way Backend Conflict Prevention Engine (Faculty Overlap, Room Collision, Section Collision, Breaks & Faculty Availability)
+            Flexible School Schedule & 5-Way Conflict Prevention Engine
           </p>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
           {canManage && (
             <button
-              onClick={() => handleGenerateDaily8PeriodGrid(timetableEntries.length > 0)}
+              onClick={() => setIsSlotModalOpen(true)}
               className="px-4 py-2 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg shadow flex items-center gap-2"
             >
-              <Clock className="w-4 h-4" />
-              {timetableEntries.length > 0 ? 'Regenerate Daily 8-Period Grid' : 'Generate Daily 8-Period Grid'}
+              <Plus className="w-4 h-4" />
+              Add Custom Time Slot
             </button>
           )}
 
@@ -658,19 +683,19 @@ export const TimetableManagement: React.FC = () => {
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
           {loading ? (
             <div className="p-12 text-center text-gray-500">Loading timetable grid...</div>
-          ) : mondaySlots.length === 0 ? (
+          ) : uniqueTimeSlots.length === 0 ? (
             <div className="p-12 text-center space-y-3">
               <Clock className="w-10 h-10 text-gray-400 mx-auto" />
               <p className="text-gray-600 dark:text-gray-300 font-medium">
-                No standard daily time slots initialized for this academic year.
+                No daily schedule time slots configured yet for this academic year.
               </p>
               {canManage && (
                 <button
-                  onClick={() => handleGenerateDaily8PeriodGrid(false)}
+                  onClick={() => setIsSlotModalOpen(true)}
                   className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-sm font-semibold shadow flex items-center gap-2 mx-auto"
                 >
-                  <Clock className="w-4 h-4" />
-                  Generate Daily 8-Period Grid
+                  <Plus className="w-4 h-4" />
+                  Add First Time Slot
                 </button>
               )}
             </div>
@@ -682,7 +707,7 @@ export const TimetableManagement: React.FC = () => {
                     <th className="px-4 py-3 text-left font-semibold text-gray-700 dark:text-gray-300 w-28 uppercase text-xs">
                       Day / Period
                     </th>
-                    {mondaySlots.map((slot) => (
+                    {uniqueTimeSlots.map((slot) => (
                       <th
                         key={slot.id}
                         className={`px-3 py-3 text-center font-semibold text-xs uppercase tracking-wider ${
@@ -691,7 +716,18 @@ export const TimetableManagement: React.FC = () => {
                             : 'text-gray-700 dark:text-gray-300'
                         }`}
                       >
-                        <div>{slot.name}</div>
+                        <div className="flex items-center justify-center gap-1">
+                          <span>{slot.name}</span>
+                          {canManage && (
+                            <button
+                              onClick={() => handleDeleteSlot(slot.id)}
+                              title="Delete Slot"
+                              className="text-gray-400 hover:text-red-500 text-[10px]"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
                         <div className="text-[10px] text-gray-500 font-normal mt-0.5">
                           {slot.startTime} - {slot.endTime}
                         </div>
@@ -707,10 +743,10 @@ export const TimetableManagement: React.FC = () => {
                         {day}
                       </td>
 
-                      {mondaySlots.map((refSlot) => {
-                        // Find matching slot for this day with same periodNumber
+                      {uniqueTimeSlots.map((refSlot) => {
+                        // Find matching slot for this day
                         const actualSlot = timeSlots.find(
-                          (s) => s.dayOfWeek === day && s.periodNumber === refSlot.periodNumber
+                          (s) => s.dayOfWeek === day && s.startTime === refSlot.startTime && s.endTime === refSlot.endTime
                         );
 
                         if (refSlot.isBreak) {
@@ -1297,6 +1333,116 @@ export const TimetableManagement: React.FC = () => {
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-medium"
                 >
                   Confirm Assignment
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal 4: Add Custom Time Slot */}
+      {isSlotModalOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6 space-y-4 shadow-xl border border-gray-200 dark:border-gray-700">
+            <div className="flex justify-between items-center border-b border-gray-100 dark:border-gray-700 pb-3">
+              <h3 className="font-bold text-lg text-gray-900 dark:text-white flex items-center gap-2">
+                <Clock className="w-5 h-5 text-indigo-600" />
+                Add Custom Time Slot
+              </h3>
+              <button
+                onClick={() => setIsSlotModalOpen(false)}
+                className="text-gray-400 hover:text-gray-600 text-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateCustomSlot} className="space-y-3 text-sm">
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Days Applicable
+                </label>
+                <select
+                  value={slotDay}
+                  onChange={(e) => setSlotDay(e.target.value)}
+                  className="w-full border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white p-2 border"
+                >
+                  <option value="ALL">All Working Days (Mon - Sat)</option>
+                  {DAYS.map((d) => (
+                    <option key={d} value={d}>
+                      {d} Only
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Slot Label / Name
+                </label>
+                <input
+                  type="text"
+                  value={slotName}
+                  onChange={(e) => setSlotName(e.target.value)}
+                  placeholder="e.g. Period 1, Morning Assembly, Lunch Break"
+                  required
+                  className="w-full border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white p-2 border"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Start Time
+                  </label>
+                  <input
+                    type="time"
+                    value={slotStartTime}
+                    onChange={(e) => setSlotStartTime(e.target.value)}
+                    required
+                    className="w-full border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white p-2 border"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    End Time
+                  </label>
+                  <input
+                    type="time"
+                    value={slotEndTime}
+                    onChange={(e) => setSlotEndTime(e.target.value)}
+                    required
+                    className="w-full border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white p-2 border"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-2">
+                <input
+                  type="checkbox"
+                  id="slotIsBreak"
+                  checked={slotIsBreak}
+                  onChange={(e) => setSlotIsBreak(e.target.checked)}
+                  className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                />
+                <label htmlFor="slotIsBreak" className="text-xs text-gray-700 dark:text-gray-300">
+                  This slot is a Break / Interval / Recess (No lectures scheduled)
+                </label>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-3">
+                <button
+                  type="button"
+                  onClick={() => setIsSlotModalOpen(false)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg font-medium"
+                >
+                  Create Time Slot
                 </button>
               </div>
             </form>

@@ -7,11 +7,12 @@ const rbac_1 = require("../middleware/rbac");
 const validate_1 = require("../middleware/validate");
 const types_1 = require("../types");
 const router = (0, express_1.Router)();
+// Public department listing for registration and portal views
+router.get('/departments', academic_controller_1.AcademicController.listDepartments);
 router.use(auth_1.requireAuth);
 // ----------------------------------------------------
 // 1. DEPARTMENTS & HOD MANAGEMENT
 // ----------------------------------------------------
-router.get('/departments', academic_controller_1.AcademicController.listDepartments);
 router.get('/departments/:id', academic_controller_1.AcademicController.getDepartmentById);
 router.post('/departments', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN]), (0, validate_1.validateRequest)({ body: academic_controller_1.createDepartmentSchema }), academic_controller_1.AcademicController.createDepartment);
 router.put('/departments/:id', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN]), (0, validate_1.validateRequest)({ body: academic_controller_1.updateDepartmentSchema }), academic_controller_1.AcademicController.updateDepartment);
@@ -30,6 +31,8 @@ router.post('/classes', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADM
 router.get('/sections', academic_controller_1.AcademicController.listSections);
 router.post('/sections', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN]), (0, validate_1.validateRequest)({ body: academic_controller_1.createSectionSchema }), academic_controller_1.AcademicController.createSection);
 router.post('/sections/:id/assign-coordinator', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN, types_1.UserRoleEnum.HOD]), (0, validate_1.validateRequest)({ body: academic_controller_1.assignCoordinatorSchema }), academic_controller_1.AcademicController.assignCoordinator);
+router.post('/sections/:id/unassign-coordinator', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN, types_1.UserRoleEnum.HOD]), academic_controller_1.AcademicController.unassignCoordinator);
+router.get('/sections/:id/coordinator-history', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN, types_1.UserRoleEnum.HOD, types_1.UserRoleEnum.FACULTY]), academic_controller_1.AcademicController.getCoordinatorHistory);
 // ----------------------------------------------------
 // 4. SUBJECTS & CLASS SUBJECTS
 // ----------------------------------------------------
@@ -52,6 +55,8 @@ router.post('/rooms', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN
 router.put('/rooms/:id', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN]), (0, validate_1.validateRequest)({ body: academic_controller_1.updateRoomSchema }), academic_controller_1.AcademicController.updateRoom);
 router.get('/time-slots', academic_controller_1.AcademicController.listTimeSlots);
 router.post('/time-slots', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN]), (0, validate_1.validateRequest)({ body: academic_controller_1.createTimeSlotSchema }), academic_controller_1.AcademicController.createTimeSlot);
+router.put('/time-slots/:id', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN]), (0, validate_1.validateRequest)({ body: academic_controller_1.updateTimeSlotSchema }), academic_controller_1.AcademicController.updateTimeSlot);
+router.delete('/time-slots/:id', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN]), academic_controller_1.AcademicController.deleteTimeSlot);
 router.post('/time-slots/generate-defaults', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN]), academic_controller_1.AcademicController.generateDefaultTimeSlots);
 // ----------------------------------------------------
 // 7. FACULTY AVAILABILITY
@@ -63,6 +68,7 @@ router.post('/faculty/availability', (0, rbac_1.requireRoles)([types_1.UserRoleE
 // ----------------------------------------------------
 router.get('/timetable', academic_controller_1.AcademicController.getTimetable);
 router.post('/timetable', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN, types_1.UserRoleEnum.HOD]), (0, validate_1.validateRequest)({ body: academic_controller_1.createTimetableEntrySchema }), academic_controller_1.AcademicController.createTimetableEntry);
+router.post('/timetable/generate-grid', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN, types_1.UserRoleEnum.HOD]), (0, validate_1.validateRequest)({ body: academic_controller_1.generateTimetableGridSchema }), academic_controller_1.AcademicController.generateTimetableGrid);
 router.put('/timetable/:id', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN, types_1.UserRoleEnum.HOD]), (0, validate_1.validateRequest)({ body: academic_controller_1.updateTimetableEntrySchema }), academic_controller_1.AcademicController.updateTimetableEntry);
 router.delete('/timetable/:id', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN, types_1.UserRoleEnum.HOD]), academic_controller_1.AcademicController.deleteTimetableEntry);
 router.post('/timetable/conflicts/check', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN, types_1.UserRoleEnum.HOD, types_1.UserRoleEnum.FACULTY]), (0, validate_1.validateRequest)({ body: academic_controller_1.checkTimetableConflictsSchema }), academic_controller_1.AcademicController.checkConflicts);

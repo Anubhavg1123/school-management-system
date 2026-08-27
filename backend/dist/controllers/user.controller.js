@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UserController = exports.resetPasswordSchema = exports.assignRolesSchema = exports.updateStatusSchema = exports.updateUserSchema = exports.createUserSchema = void 0;
+exports.UserController = exports.resetPasswordSchema = exports.assignOperationalRoleSchema = exports.assignRolesSchema = exports.updateStatusSchema = exports.updateUserSchema = exports.createUserSchema = void 0;
 const zod_1 = require("zod");
 const user_service_1 = require("../services/user.service");
 const response_1 = require("../utils/response");
@@ -46,6 +46,14 @@ exports.assignRolesSchema = zod_1.z.object({
         departmentId: zod_1.z.string().optional(),
         isPrimary: zod_1.z.boolean().optional(),
     })).min(1, 'At least one role must be provided'),
+    reason: zod_1.z.string().optional(),
+});
+exports.assignOperationalRoleSchema = zod_1.z.object({
+    role: zod_1.z.string().min(1, 'Operational role is required'),
+    departmentId: zod_1.z.string().optional(),
+    designation: zod_1.z.string().optional(),
+    employeeOrAdmissionCode: zod_1.z.string().optional(),
+    reason: zod_1.z.string().optional(),
 });
 exports.resetPasswordSchema = zod_1.z.object({
     newPassword: zod_1.z.string().min(8, 'New password must be at least 8 characters').optional(),
@@ -118,11 +126,22 @@ class UserController {
             next(error);
         }
     }
+    static async assignOperationalRole(req, res, next) {
+        try {
+            const ipAddress = req.ip || req.socket.remoteAddress;
+            const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+            const result = await user_service_1.UserService.assignOperationalRole(id, req.body, req.user.id, typeof ipAddress === 'string' ? ipAddress : undefined);
+            return (0, response_1.sendSuccess)(res, result, 200);
+        }
+        catch (error) {
+            next(error);
+        }
+    }
     static async assignRoles(req, res, next) {
         try {
             const ipAddress = req.ip || req.socket.remoteAddress;
             const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
-            const result = await user_service_1.UserService.assignRoles(id, req.body.roles, req.user.id, typeof ipAddress === 'string' ? ipAddress : undefined);
+            const result = await user_service_1.UserService.assignRoles(id, req.body.roles, req.user.id, typeof ipAddress === 'string' ? ipAddress : undefined, req.body.reason);
             return (0, response_1.sendSuccess)(res, result, 200);
         }
         catch (error) {

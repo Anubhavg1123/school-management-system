@@ -24,10 +24,29 @@ class AuthService {
         if (existingUsername) {
             throw new errorHandler_1.AppError('This username is already taken.', 409, 'USERNAME_TAKEN');
         }
+        // Disallow self-registration for higher administrative / leadership roles
+        const forbiddenSelfRoles = ['HOD', 'SUPER_ADMIN', 'PRINCIPAL', 'COORDINATOR', 'CLASS_COORDINATOR'];
+        if (data.requestedRole && forbiddenSelfRoles.includes(data.requestedRole.toUpperCase())) {
+            throw new errorHandler_1.AppError('Higher administrative and department leadership roles (HOD, Class Coordinator, Principal) cannot be requested via self-registration. They must be appointed by institutional authorities.', 400, 'UNAUTHORIZED_ROLE_REQUEST');
+        }
+        // Resolve requested role from category if needed
+        let targetRoleName = data.requestedRole;
+        if (!targetRoleName) {
+            if (data.userCategory === 'TEACHING_STAFF')
+                targetRoleName = 'FACULTY';
+            else if (data.userCategory === 'NON_TEACHING_STAFF')
+                targetRoleName = 'NON_FACULTY';
+            else if (data.userCategory === 'ADMINISTRATIVE')
+                targetRoleName = 'OFFICE_ADMIN';
+            else if (data.userCategory === 'STUDENT')
+                targetRoleName = 'STUDENT';
+            else
+                targetRoleName = 'PARENT';
+        }
         // Find requested role
-        const role = await prisma_1.prisma.role.findUnique({ where: { name: data.requestedRole } });
+        const role = await prisma_1.prisma.role.findUnique({ where: { name: targetRoleName } });
         if (!role) {
-            throw new errorHandler_1.AppError(`Invalid role requested: ${data.requestedRole}`, 400, 'INVALID_ROLE');
+            throw new errorHandler_1.AppError(`Invalid role requested: ${targetRoleName}`, 400, 'INVALID_ROLE');
         }
         // Hash password
         const passwordHash = await (0, password_1.hashPassword)(data.password);
@@ -80,7 +99,7 @@ class AuthService {
             action: 'USER_REGISTRATION_SUBMITTED',
             entityType: 'RegistrationRequest',
             entityId: result.registration.id,
-            afterState: { email: result.user.email, role: data.requestedRole, dept: data.departmentId },
+            afterState: { email: result.user.email, role: targetRoleName, dept: data.departmentId },
             ipAddress: data.ipAddress,
             userAgent: data.userAgent,
         });
@@ -180,8 +199,13 @@ class AuthService {
             throw new errorHandler_1.AppError('Invalid email/username or password.', 401, 'INVALID_CREDENTIALS');
         }
         // Check account status
-        if (user.status === types_1.UserStatusEnum.PENDING_APPROVAL) {
+        if (user.status === types_1.UserStatusEnum.PENDING_APPROVAL || user.status === 'PENDING_APPROVAL') {
             throw new errorHandler_1.AppError('Your registration is currently pending review by an administrator.', 403, 'ACCOUNT_PENDING_APPROVAL');
+        }
+        if (user.status === types_1.UserStatusEnum.APPROVED_PENDING_ROLE ||
+            user.status === 'APPROVED_PENDING_ROLE' ||
+            user.status === 'ROLE_ASSIGNMENT_REQUIRED') {
+            throw new errorHandler_1.AppError('Your account has been approved, but an operational role has not yet been assigned. Please contact the school administrator.', 403, 'ROLE_ASSIGNMENT_REQUIRED');
         }
         if (user.status === types_1.UserStatusEnum.SUSPENDED) {
             throw new errorHandler_1.AppError('Your account has been suspended. Please contact the administrator.', 403, 'ACCOUNT_SUSPENDED');
@@ -192,7 +216,7 @@ class AuthService {
         // Extract roles
         const assignedRoles = user.userRoles.map((ur) => ur.role.name);
         if (assignedRoles.length === 0) {
-            throw new errorHandler_1.AppError('No roles have been assigned to your account yet.', 403, 'NO_ROLE_ASSIGNED');
+            throw new errorHandler_1.AppError('Your account has been approved, but an operational role has not yet been assigned. Please contact the school administrator.', 403, 'ROLE_ASSIGNMENT_REQUIRED');
         }
         // Role Selection Verification
         let activeRole = assignedRoles[0];

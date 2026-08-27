@@ -16,6 +16,7 @@ import {
   createRoomSchema,
   updateRoomSchema,
   createTimeSlotSchema,
+  updateTimeSlotSchema,
   setFacultyAvailabilitySchema,
   createTimetableEntrySchema,
   generateTimetableGridSchema,
@@ -198,6 +199,19 @@ router.post(
   requireRoles([UserRoleEnum.SUPER_ADMIN, UserRoleEnum.OFFICE_ADMIN]),
   validateRequest({ body: createTimeSlotSchema }),
   AcademicController.createTimeSlot
+);
+
+router.put(
+  '/time-slots/:id',
+  requireRoles([UserRoleEnum.SUPER_ADMIN, UserRoleEnum.OFFICE_ADMIN]),
+  validateRequest({ body: updateTimeSlotSchema }),
+  AcademicController.updateTimeSlot
+);
+
+router.delete(
+  '/time-slots/:id',
+  requireRoles([UserRoleEnum.SUPER_ADMIN, UserRoleEnum.OFFICE_ADMIN]),
+  AcademicController.deleteTimeSlot
 );
 
 router.post(

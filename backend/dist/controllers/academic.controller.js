@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AcademicController = exports.uploadDocumentSchema = exports.updateStudentStatusSchema = exports.transferStudentSchema = exports.admitStudentSchema = exports.assignSubstituteSchema = exports.reviewExtraClassSchema = exports.requestExtraClassSchema = exports.checkTimetableConflictsSchema = exports.updateTimetableEntrySchema = exports.createTimetableEntrySchema = exports.setFacultyAvailabilitySchema = exports.createTimeSlotSchema = exports.updateRoomSchema = exports.createRoomSchema = exports.assignFacultySubjectSchema = exports.assignClassSubjectsSchema = exports.updateSubjectSchema = exports.createSubjectSchema = exports.assignCoordinatorSchema = exports.createSectionSchema = exports.createClassSchema = exports.setAcademicYearStatusSchema = exports.createAcademicYearSchema = exports.assignHodSchema = exports.updateDepartmentSchema = exports.createDepartmentSchema = void 0;
+exports.AcademicController = exports.uploadDocumentSchema = exports.updateStudentStatusSchema = exports.transferStudentSchema = exports.admitStudentSchema = exports.assignSubstituteSchema = exports.reviewExtraClassSchema = exports.requestExtraClassSchema = exports.checkTimetableConflictsSchema = exports.updateTimetableEntrySchema = exports.generateTimetableGridSchema = exports.createTimetableEntrySchema = exports.setFacultyAvailabilitySchema = exports.updateTimeSlotSchema = exports.createTimeSlotSchema = exports.updateRoomSchema = exports.createRoomSchema = exports.assignFacultySubjectSchema = exports.assignClassSubjectsSchema = exports.updateSubjectSchema = exports.createSubjectSchema = exports.assignCoordinatorSchema = exports.createSectionSchema = exports.createClassSchema = exports.setAcademicYearStatusSchema = exports.createAcademicYearSchema = exports.assignHodSchema = exports.updateDepartmentSchema = exports.createDepartmentSchema = void 0;
 const zod_1 = require("zod");
 const academic_service_1 = require("../services/academic.service");
 const response_1 = require("../utils/response");
@@ -24,13 +24,18 @@ exports.createAcademicYearSchema = zod_1.z.object({
     startDate: zod_1.z.string(),
     endDate: zod_1.z.string(),
     isCurrent: zod_1.z.boolean().optional(),
+    enrollmentPrefix: zod_1.z.string().optional(),
+    enrollmentSeqLength: zod_1.z.number().int().positive().optional(),
+    status: zod_1.z.enum(['UPCOMING', 'ACTIVE', 'ARCHIVED']).optional(),
 });
 exports.setAcademicYearStatusSchema = zod_1.z.object({
     isCurrent: zod_1.z.boolean(),
 });
 exports.createClassSchema = zod_1.z.object({
-    name: zod_1.z.string().min(2, 'Class name required'),
-    code: zod_1.z.string().min(2, 'Class code required'),
+    name: zod_1.z.string().min(1, 'Class name required'),
+    code: zod_1.z.string().min(1, 'Class code required'),
+    order: zod_1.z.number().int().optional(),
+    educationLevel: zod_1.z.enum(['PRIMARY', 'MIDDLE', 'SECONDARY', 'HIGHER_SECONDARY', 'BELOW_10TH', '10TH', 'ABOVE_10TH']).optional(),
     departmentId: zod_1.z.string().optional(),
     academicYearId: zod_1.z.string().min(1, 'Academic year required'),
 });
@@ -99,6 +104,12 @@ exports.createTimeSlotSchema = zod_1.z.object({
     endTime: zod_1.z.string().min(4, 'End time required (HH:MM)'),
     isBreak: zod_1.z.boolean().optional(),
 });
+exports.updateTimeSlotSchema = zod_1.z.object({
+    name: zod_1.z.string().optional(),
+    startTime: zod_1.z.string().min(4).optional(),
+    endTime: zod_1.z.string().min(4).optional(),
+    isBreak: zod_1.z.boolean().optional(),
+});
 exports.setFacultyAvailabilitySchema = zod_1.z.object({
     facultyId: zod_1.z.string().min(1, 'Faculty ID required'),
     academicYearId: zod_1.z.string().min(1, 'Academic year required'),
@@ -114,20 +125,43 @@ exports.createTimetableEntrySchema = zod_1.z.object({
     departmentId: zod_1.z.string().optional(),
     classId: zod_1.z.string().min(1, 'Class ID required'),
     sectionId: zod_1.z.string().min(1, 'Section ID required'),
-    subjectId: zod_1.z.string().min(1, 'Subject ID required'),
-    facultyId: zod_1.z.string().min(1, 'Faculty ID required'),
-    roomId: zod_1.z.string().min(1, 'Room ID required'),
-    timeSlotId: zod_1.z.string().min(1, 'Time slot ID required'),
-    dayOfWeek: zod_1.z.enum(['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']),
-});
-exports.updateTimetableEntrySchema = zod_1.z.object({
     subjectId: zod_1.z.string().optional(),
     facultyId: zod_1.z.string().optional(),
     roomId: zod_1.z.string().optional(),
+    timeSlotId: zod_1.z.string().min(1, 'Time slot ID required'),
+    dayOfWeek: zod_1.z.enum(['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']),
+});
+exports.generateTimetableGridSchema = zod_1.z.object({
+    academicYearId: zod_1.z.string().min(1, 'Academic year ID required'),
+    classId: zod_1.z.string().min(1, 'Class ID required'),
+    sectionId: zod_1.z.string().min(1, 'Section ID required'),
+    days: zod_1.z.array(zod_1.z.string()).optional(),
+    periods: zod_1.z.array(zod_1.z.object({
+        periodNumber: zod_1.z.number().int().positive(),
+        name: zod_1.z.string(),
+        startTime: zod_1.z.string(),
+        endTime: zod_1.z.string(),
+        isBreak: zod_1.z.boolean().optional(),
+    })).optional(),
+    forceRegenerate: zod_1.z.boolean().optional(),
+});
+exports.updateTimetableEntrySchema = zod_1.z.object({
+    subjectId: zod_1.z.string().nullable().optional(),
+    facultyId: zod_1.z.string().nullable().optional(),
+    roomId: zod_1.z.string().nullable().optional(),
     timeSlotId: zod_1.z.string().optional(),
     dayOfWeek: zod_1.z.enum(['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']).optional(),
+    status: zod_1.z.enum(['ACTIVE', 'CANCELLED', 'MOVED']).optional(),
 });
-exports.checkTimetableConflictsSchema = exports.createTimetableEntrySchema.extend({
+exports.checkTimetableConflictsSchema = zod_1.z.object({
+    academicYearId: zod_1.z.string().min(1, 'Academic year required'),
+    classId: zod_1.z.string().optional(),
+    sectionId: zod_1.z.string().optional(),
+    subjectId: zod_1.z.string().optional(),
+    facultyId: zod_1.z.string().optional(),
+    roomId: zod_1.z.string().optional(),
+    timeSlotId: zod_1.z.string().min(1, 'Time slot ID required'),
+    dayOfWeek: zod_1.z.enum(['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY', 'SUNDAY']),
     excludeEntryId: zod_1.z.string().optional(),
 });
 exports.requestExtraClassSchema = zod_1.z.object({
@@ -171,7 +205,7 @@ exports.admitStudentSchema = zod_1.z.object({
     bloodGroup: zod_1.z.string().optional(),
     address: zod_1.z.string().optional(),
     emergencyContact: zod_1.z.string().optional(),
-    admissionNumber: zod_1.z.string().min(1, 'Admission number required'),
+    admissionNumber: zod_1.z.string().optional(),
     enrollmentNumber: zod_1.z.string().optional(),
     rollNumber: zod_1.z.string().optional(),
     academicYearId: zod_1.z.string().optional(),
@@ -346,6 +380,27 @@ class AcademicController {
             next(error);
         }
     }
+    static async unassignCoordinator(req, res, next) {
+        try {
+            const ipAddress = req.ip || req.socket.remoteAddress;
+            const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+            const result = await academic_service_1.AcademicService.unassignClassCoordinator(id, req.user.id, req.body?.reason, typeof ipAddress === 'string' ? ipAddress : undefined);
+            return (0, response_1.sendSuccess)(res, result, 200);
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    static async getCoordinatorHistory(req, res, next) {
+        try {
+            const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+            const history = await academic_service_1.AcademicService.getClassCoordinatorHistory(id);
+            return (0, response_1.sendSuccess)(res, history, 200);
+        }
+        catch (error) {
+            next(error);
+        }
+    }
     // 4. Subjects & Class Subjects
     static async listSubjects(req, res, next) {
         try {
@@ -505,6 +560,28 @@ class AcademicController {
             next(error);
         }
     }
+    static async updateTimeSlot(req, res, next) {
+        try {
+            const ipAddress = req.ip || req.socket.remoteAddress;
+            const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+            const slot = await academic_service_1.AcademicService.updateTimeSlot(id, req.body, req.user.id, typeof ipAddress === 'string' ? ipAddress : undefined);
+            return (0, response_1.sendSuccess)(res, slot, 200);
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    static async deleteTimeSlot(req, res, next) {
+        try {
+            const ipAddress = req.ip || req.socket.remoteAddress;
+            const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+            const result = await academic_service_1.AcademicService.deleteTimeSlot(id, req.user.id, typeof ipAddress === 'string' ? ipAddress : undefined);
+            return (0, response_1.sendSuccess)(res, result, 200);
+        }
+        catch (error) {
+            next(error);
+        }
+    }
     // 7. Faculty Availability
     static async getFacultyAvailability(req, res, next) {
         try {
@@ -547,6 +624,16 @@ class AcademicController {
                 dayOfWeek,
             });
             return (0, response_1.sendSuccess)(res, entries, 200);
+        }
+        catch (error) {
+            next(error);
+        }
+    }
+    static async generateTimetableGrid(req, res, next) {
+        try {
+            const ipAddress = req.ip || req.socket.remoteAddress;
+            const result = await academic_service_1.AcademicService.generateTimetableGrid(req.body, req.user.id, typeof ipAddress === 'string' ? ipAddress : undefined);
+            return (0, response_1.sendSuccess)(res, result, 201);
         }
         catch (error) {
             next(error);

@@ -46,6 +46,14 @@ const student_case_routes_1 = __importDefault(require("./student-case.routes"));
 const smart_campus_routes_1 = __importDefault(require("./smart-campus.routes"));
 const diagnostics_routes_1 = __importDefault(require("./diagnostics.routes"));
 const feature_flag_routes_1 = __importDefault(require("./feature-flag.routes"));
+// Phase 17
+const institutional_workflow_routes_1 = __importDefault(require("./institutional-workflow.routes"));
+const calendar_event_routes_1 = __importDefault(require("./calendar-event.routes"));
+const parent_meeting_routes_1 = __importDefault(require("./parent-meeting.routes"));
+const lifecycle_routes_1 = __importDefault(require("./lifecycle.routes"));
+const asset_inventory_routes_1 = __importDefault(require("./asset-inventory.routes"));
+const grievance_policy_routes_1 = __importDefault(require("./grievance-policy.routes"));
+const operations_intelligence_routes_1 = __importDefault(require("./operations-intelligence.routes"));
 const router = (0, express_1.Router)();
 router.use('/auth', auth_routes_1.default);
 router.use('/registrations', registration_routes_1.default);
@@ -89,4 +97,12 @@ router.use('/cases', student_case_routes_1.default);
 router.use('/campus', smart_campus_routes_1.default);
 router.use('/diagnostics', diagnostics_routes_1.default);
 router.use('/features', feature_flag_routes_1.default);
+// Phase 17 routes
+router.use('/workflows', institutional_workflow_routes_1.default);
+router.use('/calendar', calendar_event_routes_1.default);
+router.use('/ptm', parent_meeting_routes_1.default);
+router.use('/lifecycle', lifecycle_routes_1.default);
+router.use('/assets', asset_inventory_routes_1.default);
+router.use('/grievances', grievance_policy_routes_1.default);
+router.use('/intelligence', operations_intelligence_routes_1.default);
 exports.default = router;

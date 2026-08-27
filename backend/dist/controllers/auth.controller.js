@@ -19,7 +19,7 @@ exports.registerSchema = zod_1.z.object({
     emergencyContactName: zod_1.z.string().optional(),
     emergencyContactPhone: zod_1.z.string().optional(),
     userCategory: zod_1.z.enum(['TEACHING_STAFF', 'NON_TEACHING_STAFF', 'ADMINISTRATIVE', 'STUDENT', 'OTHER']).optional(),
-    requestedRole: zod_1.z.string().min(1, 'Role must be selected'),
+    requestedRole: zod_1.z.string().optional(),
     departmentId: zod_1.z.string().optional(),
     applicationNotes: zod_1.z.string().optional(),
     idProofUrl: zod_1.z.string().optional(),

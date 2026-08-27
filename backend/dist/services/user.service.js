@@ -277,7 +277,141 @@ class UserService {
         });
         return updated;
     }
-    static async assignRoles(id, roles, actorId, ipAddress) {
+    static async assignOperationalRole(userId, data, actorId, ipAddress) {
+        const user = await prisma_1.prisma.user.findUnique({
+            where: { id: userId },
+            include: { userRoles: { include: { role: true } } },
+        });
+        if (!user) {
+            throw new errorHandler_1.AppError('User not found.', 404, 'USER_NOT_FOUND');
+        }
+        const targetRole = await prisma_1.prisma.role.findUnique({ where: { name: data.role } });
+        if (!targetRole) {
+            throw new errorHandler_1.AppError(`Operational role '${data.role}' is invalid.`, 400, 'INVALID_ROLE');
+        }
+        const previousRole = user.userRoles.find((r) => r.isPrimary)?.role.name || user.activeRole || null;
+        const deptId = data.departmentId || null;
+        const code = data.employeeOrAdmissionCode || `ID-${Date.now().toString().slice(-6)}`;
+        await prisma_1.prisma.$transaction(async (tx) => {
+            // 1. Clear old roles
+            await tx.userRole.deleteMany({ where: { userId } });
+            // 2. Insert new primary role
+            await tx.userRole.create({
+                data: {
+                    userId,
+                    roleId: targetRole.id,
+                    departmentId: deptId,
+                    isPrimary: true,
+                    assignedBy: actorId,
+                },
+            });
+            // 3. Activate user account and set activeRole
+            await tx.user.update({
+                where: { id: userId },
+                data: {
+                    status: types_1.UserStatusEnum.ACTIVE,
+                    activeRole: data.role,
+                },
+            });
+            // 4. Update registration request if exists
+            const reg = await tx.registrationRequest.findUnique({ where: { userId } });
+            if (reg && reg.status !== types_1.RegistrationStatusEnum.REJECTED) {
+                await tx.registrationRequest.update({
+                    where: { id: reg.id },
+                    data: {
+                        status: types_1.RegistrationStatusEnum.APPROVED,
+                        departmentId: deptId,
+                    },
+                });
+            }
+            // 5. Create or update profile records
+            if (data.role === types_1.UserRoleEnum.FACULTY || data.role === types_1.UserRoleEnum.HOD) {
+                let finalDeptId = deptId;
+                if (!finalDeptId) {
+                    const firstDept = await tx.department.findFirst({ where: { status: 'ACTIVE' } });
+                    if (firstDept)
+                        finalDeptId = firstDept.id;
+                    else {
+                        const genDept = await tx.department.create({
+                            data: {
+                                code: 'GEN',
+                                name: 'General Academics',
+                                description: 'Default institutional academic division.',
+                                status: 'ACTIVE',
+                            },
+                        });
+                        finalDeptId = genDept.id;
+                    }
+                }
+                await tx.faculty.upsert({
+                    where: { userId },
+                    update: {
+                        departmentId: finalDeptId,
+                        designation: data.designation || (data.role === types_1.UserRoleEnum.HOD ? 'HEAD_OF_DEPARTMENT' : 'ASST_PROFESSOR'),
+                        isHod: data.role === types_1.UserRoleEnum.HOD,
+                        status: 'ACTIVE',
+                    },
+                    create: {
+                        userId,
+                        employeeCode: code,
+                        departmentId: finalDeptId,
+                        designation: data.designation || (data.role === types_1.UserRoleEnum.HOD ? 'HEAD_OF_DEPARTMENT' : 'ASST_PROFESSOR'),
+                        isHod: data.role === types_1.UserRoleEnum.HOD,
+                        status: 'ACTIVE',
+                    },
+                });
+            }
+            else if (data.role === types_1.UserRoleEnum.NON_FACULTY || data.role === types_1.UserRoleEnum.OFFICE_ADMIN) {
+                await tx.nonFacultyStaff.upsert({
+                    where: { userId },
+                    update: {
+                        jobTitle: data.designation || (data.role === types_1.UserRoleEnum.OFFICE_ADMIN ? 'ACADEMIC_OFFICE_ADMIN' : 'STAFF'),
+                        departmentOrUnit: deptId || (data.role === types_1.UserRoleEnum.OFFICE_ADMIN ? 'ACADEMIC_OFFICE' : 'OPERATIONS'),
+                        status: 'ACTIVE',
+                    },
+                    create: {
+                        userId,
+                        employeeCode: code,
+                        jobTitle: data.designation || (data.role === types_1.UserRoleEnum.OFFICE_ADMIN ? 'ACADEMIC_OFFICE_ADMIN' : 'STAFF'),
+                        departmentOrUnit: deptId || (data.role === types_1.UserRoleEnum.OFFICE_ADMIN ? 'ACADEMIC_OFFICE' : 'OPERATIONS'),
+                        status: 'ACTIVE',
+                    },
+                });
+            }
+            else if (data.role === types_1.UserRoleEnum.STUDENT) {
+                await tx.student.upsert({
+                    where: { userId },
+                    update: { status: 'ACTIVE' },
+                    create: {
+                        userId,
+                        admissionNumber: code,
+                        status: 'ACTIVE',
+                    },
+                });
+            }
+            // 6. Notification
+            await tx.notification.create({
+                data: {
+                    userId,
+                    title: 'Operational Role Assigned',
+                    message: `Your operational role has been set to '${targetRole.displayName}'. Your portal account is now active.`,
+                    type: 'APPROVAL',
+                },
+            });
+        });
+        // 7. Audit Log
+        await audit_service_1.AuditService.log({
+            userId: actorId,
+            action: 'USER_ROLE_ASSIGNED',
+            entityType: 'UserRole',
+            entityId: userId,
+            beforeState: { previousRole, previousStatus: user.status },
+            afterState: { assignedRole: data.role, assignedBy: actorId, reason: data.reason || 'Operational role assigned by Principal' },
+            ipAddress,
+        });
+        return this.getUserById(userId);
+    }
+    static async assignRoles(id, roles, actorId, ipAddress, reason) {
         const user = await prisma_1.prisma.user.findUnique({
             where: { id },
             include: { userRoles: { include: { role: true } } },
@@ -288,6 +422,8 @@ class UserService {
         if (roles.length === 0) {
             throw new errorHandler_1.AppError('At least one role must be assigned.', 400, 'ROLE_REQUIRED');
         }
+        const previousRoles = user.userRoles.map((ur) => ur.role.name);
+        const primaryRoleName = roles.find((r) => r.isPrimary)?.roleName || roles[0].roleName;
         await prisma_1.prisma.$transaction(async (tx) => {
             // Clear old roles
             await tx.userRole.deleteMany({ where: { userId: id } });
@@ -307,13 +443,34 @@ class UserService {
                     },
                 });
             }
+            // If user was pending role assignment, activate now
+            if (user.status === types_1.UserStatusEnum.PENDING_APPROVAL ||
+                user.status === types_1.UserStatusEnum.APPROVED_PENDING_ROLE ||
+                user.status === 'APPROVED_PENDING_ROLE') {
+                await tx.user.update({
+                    where: { id },
+                    data: {
+                        status: types_1.UserStatusEnum.ACTIVE,
+                        activeRole: primaryRoleName,
+                    },
+                });
+            }
+            else {
+                await tx.user.update({
+                    where: { id },
+                    data: {
+                        activeRole: primaryRoleName,
+                    },
+                });
+            }
         });
         await audit_service_1.AuditService.log({
             userId: actorId,
             action: 'USER_ROLES_MODIFIED',
             entityType: 'User',
             entityId: id,
-            afterState: { roles },
+            beforeState: { previousRoles, previousStatus: user.status },
+            afterState: { roles, primaryRole: primaryRoleName, reason: reason || 'Roles updated by Administrator' },
             ipAddress,
         });
         return this.getUserById(id);

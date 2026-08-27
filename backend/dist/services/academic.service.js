@@ -265,10 +265,13 @@ class AcademicService {
         if (start >= end) {
             throw new errorHandler_1.AppError('Start date must be before end date.', 400, 'INVALID_DATE_RANGE');
         }
+        const derivedPrefix = (data.enrollmentPrefix && data.enrollmentPrefix.trim() !== '')
+            ? data.enrollmentPrefix.trim()
+            : (data.name.match(/\d{2,4}/)?.[0]?.slice(-2) || '26');
         if (data.isCurrent) {
             await prisma_1.prisma.academicYear.updateMany({
                 where: { isCurrent: true },
-                data: { isCurrent: false },
+                data: { isCurrent: false, status: 'UPCOMING' },
             });
         }
         const year = await prisma_1.prisma.academicYear.create({
@@ -277,6 +280,10 @@ class AcademicService {
                 startDate: start,
                 endDate: end,
                 isCurrent: data.isCurrent ?? false,
+                status: data.isCurrent ? 'ACTIVE' : data.status || 'UPCOMING',
+                enrollmentPrefix: derivedPrefix,
+                enrollmentSeqLength: data.enrollmentSeqLength !== undefined ? Number(data.enrollmentSeqLength) : 4,
+                nextEnrollmentSeq: 1,
             },
         });
         await audit_service_1.AuditService.log({
@@ -295,14 +302,20 @@ class AcademicService {
             throw new errorHandler_1.AppError('Academic year not found.', 404, 'ACADEMIC_YEAR_NOT_FOUND');
         }
         if (isCurrent) {
+            if (!year.enrollmentPrefix || year.enrollmentPrefix.trim() === '') {
+                throw new errorHandler_1.AppError('Enrollment prefix is required before activating this academic year.', 400, 'ENROLLMENT_PREFIX_REQUIRED');
+            }
             await prisma_1.prisma.academicYear.updateMany({
                 where: { isCurrent: true },
-                data: { isCurrent: false },
+                data: { isCurrent: false, status: 'UPCOMING' },
             });
         }
         const updated = await prisma_1.prisma.academicYear.update({
             where: { id },
-            data: { isCurrent },
+            data: {
+                isCurrent,
+                status: isCurrent ? 'ACTIVE' : 'UPCOMING',
+            },
         });
         await audit_service_1.AuditService.log({
             userId: actorId,
@@ -341,18 +354,32 @@ class AcademicService {
                     },
                 },
             },
-            orderBy: { name: 'asc' },
+            orderBy: [{ order: 'asc' }, { name: 'asc' }],
         });
     }
     static async createClass(data, actorId, ipAddress) {
-        const existing = await prisma_1.prisma.class.findUnique({ where: { code: data.code } });
-        if (existing) {
+        if (!data.name || data.name.trim().length === 0) {
+            throw new errorHandler_1.AppError('Class name is required.', 400, 'INVALID_CLASS_NAME');
+        }
+        const existingCode = await prisma_1.prisma.class.findUnique({ where: { code: data.code } });
+        if (existingCode) {
             throw new errorHandler_1.AppError(`Class code '${data.code}' is already in use.`, 409, 'CLASS_CODE_EXISTS');
+        }
+        const existingName = await prisma_1.prisma.class.findFirst({
+            where: {
+                academicYearId: data.academicYearId,
+                name: data.name,
+            },
+        });
+        if (existingName) {
+            throw new errorHandler_1.AppError(`Class '${data.name}' already exists in this academic year.`, 409, 'CLASS_EXISTS');
         }
         const newClass = await prisma_1.prisma.class.create({
             data: {
                 name: data.name,
                 code: data.code,
+                order: data.order !== undefined ? Number(data.order) : 1,
+                educationLevel: data.educationLevel || 'PRIMARY',
                 departmentId: data.departmentId || null,
                 academicYearId: data.academicYearId,
             },
@@ -378,6 +405,24 @@ class AcademicService {
                     include: {
                         department: true,
                         academicYear: true,
+                    },
+                },
+                coordinatorHistories: {
+                    where: { status: 'ACTIVE' },
+                    include: {
+                        faculty: {
+                            include: {
+                                user: {
+                                    select: {
+                                        id: true,
+                                        firstName: true,
+                                        lastName: true,
+                                        email: true,
+                                        phone: true,
+                                    },
+                                },
+                            },
+                        },
                     },
                 },
                 _count: {
@@ -468,6 +513,71 @@ class AcademicService {
             ipAddress,
         });
         return result;
+    }
+    static async unassignClassCoordinator(sectionId, actorId, reason, ipAddress) {
+        const section = await prisma_1.prisma.section.findUnique({
+            where: { id: sectionId },
+        });
+        if (!section) {
+            throw new errorHandler_1.AppError('Section not found.', 404, 'SECTION_NOT_FOUND');
+        }
+        const previousFacultyId = section.coordinatorFacultyId;
+        const result = await prisma_1.prisma.$transaction(async (tx) => {
+            // 1. Close current coordinator history
+            await tx.classCoordinatorHistory.updateMany({
+                where: { sectionId, status: 'ACTIVE' },
+                data: {
+                    endDate: new Date(),
+                    status: 'PAST',
+                    reason: reason || 'Coordinator unassigned by administrator.',
+                },
+            });
+            // 2. Clear section coordinator
+            const updatedSection = await tx.section.update({
+                where: { id: sectionId },
+                data: { coordinatorFacultyId: null },
+            });
+            return { section: updatedSection, previousFacultyId };
+        });
+        await audit_service_1.AuditService.log({
+            userId: actorId,
+            action: 'CLASS_COORDINATOR_REMOVED',
+            entityType: 'Section',
+            entityId: sectionId,
+            afterState: { previousFacultyId, reason },
+            ipAddress,
+        });
+        return result;
+    }
+    static async getClassCoordinatorHistory(sectionId) {
+        return prisma_1.prisma.classCoordinatorHistory.findMany({
+            where: { sectionId },
+            include: {
+                faculty: {
+                    include: {
+                        user: {
+                            select: {
+                                id: true,
+                                firstName: true,
+                                lastName: true,
+                                email: true,
+                                phone: true,
+                            },
+                        },
+                    },
+                },
+                assignedBy: {
+                    select: {
+                        id: true,
+                        firstName: true,
+                        lastName: true,
+                        email: true,
+                    },
+                },
+                academicYear: true,
+            },
+            orderBy: { startDate: 'desc' },
+        });
     }
     // ----------------------------------------------------
     // 4. SUBJECTS & CLASS-SUBJECT ALLOCATIONS
@@ -763,6 +873,9 @@ class AcademicService {
         });
     }
     static async createTimeSlot(data, actorId, ipAddress) {
+        if (data.startTime >= data.endTime) {
+            throw new errorHandler_1.AppError('Slot start time must be earlier than end time.', 400, 'INVALID_SLOT_TIME');
+        }
         const existing = await prisma_1.prisma.timeSlot.findUnique({
             where: {
                 academicYearId_dayOfWeek_periodNumber: {
@@ -796,16 +909,70 @@ class AcademicService {
         });
         return timeSlot;
     }
+    static async updateTimeSlot(id, data, actorId, ipAddress) {
+        const existing = await prisma_1.prisma.timeSlot.findUnique({ where: { id } });
+        if (!existing) {
+            throw new errorHandler_1.AppError('Time slot not found.', 404, 'TIMESLOT_NOT_FOUND');
+        }
+        const startTime = data.startTime || existing.startTime;
+        const endTime = data.endTime || existing.endTime;
+        if (startTime >= endTime) {
+            throw new errorHandler_1.AppError('Slot start time must be earlier than end time.', 400, 'INVALID_SLOT_TIME');
+        }
+        const updated = await prisma_1.prisma.timeSlot.update({
+            where: { id },
+            data: {
+                name: data.name ?? existing.name,
+                startTime,
+                endTime,
+                isBreak: data.isBreak !== undefined ? data.isBreak : existing.isBreak,
+            },
+        });
+        await audit_service_1.AuditService.log({
+            userId: actorId,
+            action: 'TIME_SLOT_UPDATED',
+            entityType: 'TimeSlot',
+            entityId: id,
+            beforeState: existing,
+            afterState: updated,
+            ipAddress,
+        });
+        return updated;
+    }
+    static async deleteTimeSlot(id, actorId, ipAddress) {
+        const existing = await prisma_1.prisma.timeSlot.findUnique({
+            where: { id },
+            include: { _count: { select: { timetableEntries: true } } },
+        });
+        if (!existing) {
+            throw new errorHandler_1.AppError('Time slot not found.', 404, 'TIMESLOT_NOT_FOUND');
+        }
+        if (existing._count.timetableEntries > 0) {
+            throw new errorHandler_1.AppError('Cannot delete time slot with active assigned timetable lectures. Remove scheduled sessions first.', 400, 'SLOT_IN_USE');
+        }
+        await prisma_1.prisma.timeSlot.delete({ where: { id } });
+        await audit_service_1.AuditService.log({
+            userId: actorId,
+            action: 'TIME_SLOT_DELETED',
+            entityType: 'TimeSlot',
+            entityId: id,
+            beforeState: existing,
+            ipAddress,
+        });
+        return { success: true, message: 'Time slot deleted successfully.' };
+    }
     static async generateDefaultTimeSlots(academicYearId, days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'], actorId) {
         const defaultPeriods = [
-            { periodNumber: 1, name: 'Period 1', startTime: '09:00', endTime: '10:00', isBreak: false },
-            { periodNumber: 2, name: 'Period 2', startTime: '10:00', endTime: '11:00', isBreak: false },
-            { periodNumber: 3, name: 'Morning Break', startTime: '11:00', endTime: '11:15', isBreak: true },
-            { periodNumber: 4, name: 'Period 3', startTime: '11:15', endTime: '12:15', isBreak: false },
-            { periodNumber: 5, name: 'Lunch Break', startTime: '12:15', endTime: '13:00', isBreak: true },
-            { periodNumber: 6, name: 'Period 4', startTime: '13:00', endTime: '14:00', isBreak: false },
-            { periodNumber: 7, name: 'Period 5', startTime: '14:00', endTime: '15:00', isBreak: false },
-            { periodNumber: 8, name: 'Period 6', startTime: '15:00', endTime: '16:00', isBreak: false },
+            { periodNumber: 1, name: 'Period 1', startTime: '08:00', endTime: '08:45', isBreak: false },
+            { periodNumber: 2, name: 'Period 2', startTime: '08:45', endTime: '09:30', isBreak: false },
+            { periodNumber: 3, name: 'Period 3', startTime: '09:30', endTime: '10:15', isBreak: false },
+            { periodNumber: 4, name: 'Short Break', startTime: '10:15', endTime: '10:30', isBreak: true },
+            { periodNumber: 5, name: 'Period 4', startTime: '10:30', endTime: '11:15', isBreak: false },
+            { periodNumber: 6, name: 'Period 5', startTime: '11:15', endTime: '12:00', isBreak: false },
+            { periodNumber: 7, name: 'Lunch Break', startTime: '12:00', endTime: '12:45', isBreak: true },
+            { periodNumber: 8, name: 'Period 6', startTime: '12:45', endTime: '13:30', isBreak: false },
+            { periodNumber: 9, name: 'Period 7', startTime: '13:30', endTime: '14:15', isBreak: false },
+            { periodNumber: 10, name: 'Period 8', startTime: '14:15', endTime: '15:00', isBreak: false },
         ];
         const results = [];
         for (const day of days) {
@@ -847,6 +1014,158 @@ class AcademicService {
             });
         }
         return results;
+    }
+    static async generateTimetableGrid(data, actorId, ipAddress) {
+        // 1. Validate Academic Year exists
+        const year = await prisma_1.prisma.academicYear.findUnique({ where: { id: data.academicYearId } });
+        if (!year) {
+            throw new errorHandler_1.AppError('Cannot generate timetable. Academic year not found.', 404, 'ACADEMIC_YEAR_NOT_FOUND');
+        }
+        // 2. Validate Class exists and belongs to year
+        const classItem = await prisma_1.prisma.class.findFirst({
+            where: { id: data.classId, academicYearId: data.academicYearId },
+        });
+        if (!classItem) {
+            throw new errorHandler_1.AppError('Cannot generate timetable. Selected class was not found in the academic year.', 404, 'CLASS_NOT_FOUND');
+        }
+        // 3. Validate Section exists and belongs to class
+        const section = await prisma_1.prisma.section.findFirst({
+            where: { id: data.sectionId, classId: data.classId },
+        });
+        if (!section) {
+            throw new errorHandler_1.AppError(`Cannot generate timetable. No active section is configured for Class ${classItem.name}.`, 404, 'SECTION_NOT_FOUND');
+        }
+        // 4. Default 8 periods with configurable timings
+        const defaultPeriods = data.periods && data.periods.length > 0 ? data.periods : [
+            { periodNumber: 1, name: 'Period 1', startTime: '08:00', endTime: '08:45', isBreak: false },
+            { periodNumber: 2, name: 'Period 2', startTime: '08:45', endTime: '09:30', isBreak: false },
+            { periodNumber: 3, name: 'Period 3', startTime: '09:30', endTime: '10:15', isBreak: false },
+            { periodNumber: 4, name: 'Period 4', startTime: '10:30', endTime: '11:15', isBreak: false },
+            { periodNumber: 5, name: 'Period 5', startTime: '11:15', endTime: '12:00', isBreak: false },
+            { periodNumber: 6, name: 'Period 6', startTime: '12:45', endTime: '13:30', isBreak: false },
+            { periodNumber: 7, name: 'Period 7', startTime: '13:30', endTime: '14:15', isBreak: false },
+            { periodNumber: 8, name: 'Period 8', startTime: '14:15', endTime: '15:00', isBreak: false },
+        ];
+        // 5. Configurable working days (default Mon-Sat)
+        const workingDays = data.days && data.days.length > 0
+            ? data.days
+            : ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'];
+        // 6. Check existing timetable entries for this section
+        const existingEntries = await prisma_1.prisma.timetableEntry.findMany({
+            where: {
+                academicYearId: data.academicYearId,
+                classId: data.classId,
+                sectionId: data.sectionId,
+                status: 'ACTIVE',
+            },
+            include: {
+                subject: true,
+                faculty: { include: { user: true } },
+                room: true,
+                timeSlot: true,
+            },
+        });
+        if (existingEntries.length > 0 && !data.forceRegenerate) {
+            return {
+                message: 'Timetable grid already exists for this class section. Existing schedule loaded.',
+                alreadyExists: true,
+                totalSlots: existingEntries.length,
+                entries: existingEntries,
+            };
+        }
+        // 7. Transactional Grid Generation
+        const result = await prisma_1.prisma.$transaction(async (tx) => {
+            // If forceRegenerate, clear existing entries
+            if (data.forceRegenerate && existingEntries.length > 0) {
+                await tx.timetableEntry.deleteMany({
+                    where: {
+                        academicYearId: data.academicYearId,
+                        classId: data.classId,
+                        sectionId: data.sectionId,
+                    },
+                });
+            }
+            // Upsert TimeSlots
+            const timeSlotMap = new Map();
+            for (const day of workingDays) {
+                for (const p of defaultPeriods) {
+                    const slot = await tx.timeSlot.upsert({
+                        where: {
+                            academicYearId_dayOfWeek_periodNumber: {
+                                academicYearId: data.academicYearId,
+                                dayOfWeek: day,
+                                periodNumber: p.periodNumber,
+                            },
+                        },
+                        update: {
+                            name: p.name,
+                            startTime: p.startTime,
+                            endTime: p.endTime,
+                            isBreak: p.isBreak ?? false,
+                        },
+                        create: {
+                            academicYearId: data.academicYearId,
+                            dayOfWeek: day,
+                            periodNumber: p.periodNumber,
+                            name: p.name,
+                            startTime: p.startTime,
+                            endTime: p.endTime,
+                            isBreak: p.isBreak ?? false,
+                        },
+                    });
+                    timeSlotMap.set(`${day}_${p.periodNumber}`, slot.id);
+                }
+            }
+            // Check if actorId corresponds to a real user in the DB
+            const validActor = actorId ? await tx.user.findUnique({ where: { id: actorId }, select: { id: true } }) : null;
+            // Generate empty period slots in timetable
+            const createdEntries = [];
+            for (const day of workingDays) {
+                for (const p of defaultPeriods) {
+                    const slotId = timeSlotMap.get(`${day}_${p.periodNumber}`);
+                    if (!slotId)
+                        continue;
+                    const entry = await tx.timetableEntry.create({
+                        data: {
+                            academicYearId: data.academicYearId,
+                            departmentId: classItem.departmentId || null,
+                            classId: data.classId,
+                            sectionId: data.sectionId,
+                            timeSlotId: slotId,
+                            dayOfWeek: day,
+                            status: 'ACTIVE',
+                            createdByUserId: validActor ? validActor.id : null,
+                        },
+                        include: {
+                            timeSlot: true,
+                            class: true,
+                            section: true,
+                        },
+                    });
+                    createdEntries.push(entry);
+                }
+            }
+            return createdEntries;
+        });
+        await audit_service_1.AuditService.log({
+            userId: actorId,
+            action: 'TIMETABLE_GRID_GENERATED',
+            entityType: 'TimetableEntry',
+            entityId: data.sectionId,
+            afterState: {
+                academicYearId: data.academicYearId,
+                classId: data.classId,
+                sectionId: data.sectionId,
+                slotsCount: result.length,
+            },
+            ipAddress,
+        });
+        return {
+            message: `Successfully generated ${result.length} daily timetable period slots for Class ${classItem.name} (${section.name}).`,
+            alreadyExists: false,
+            totalSlots: result.length,
+            entries: result,
+        };
     }
     // ----------------------------------------------------
     // 7. FACULTY AVAILABILITY
@@ -901,105 +1220,134 @@ class AcademicService {
             whereBase.id = { not: data.excludeEntryId };
         }
         // 1. Faculty Overlap Collision
-        const facultyConflict = await prisma_1.prisma.timetableEntry.findFirst({
-            where: {
-                ...whereBase,
-                facultyId: data.facultyId,
-            },
-            include: {
-                class: true,
-                section: true,
-                subject: true,
-                faculty: { include: { user: true } },
-            },
-        });
-        if (facultyConflict) {
-            return {
-                hasConflict: true,
-                type: 'FACULTY_CONFLICT',
-                message: `Faculty ${facultyConflict.faculty.user.firstName} ${facultyConflict.faculty.user.lastName} is already teaching ${facultyConflict.subject.name} to ${facultyConflict.class.name} (${facultyConflict.section.name}) at this time slot.`,
-                conflictingEntry: facultyConflict,
-            };
-        }
-        // 2. Room Collision
-        const roomConflict = await prisma_1.prisma.timetableEntry.findFirst({
-            where: {
-                ...whereBase,
-                roomId: data.roomId,
-            },
-            include: {
-                class: true,
-                section: true,
-                room: true,
-            },
-        });
-        if (roomConflict) {
-            return {
-                hasConflict: true,
-                type: 'ROOM_CONFLICT',
-                message: `Room ${roomConflict.room.name} (${roomConflict.room.roomNumber}) is already booked by ${roomConflict.class.name} (${roomConflict.section.name}) at this time slot.`,
-                conflictingEntry: roomConflict,
-            };
-        }
-        // 3. Section Collision
-        const sectionConflict = await prisma_1.prisma.timetableEntry.findFirst({
-            where: {
-                ...whereBase,
-                sectionId: data.sectionId,
-            },
-            include: {
-                subject: true,
-                section: true,
-            },
-        });
-        if (sectionConflict) {
-            return {
-                hasConflict: true,
-                type: 'SECTION_CONFLICT',
-                message: `Section ${sectionConflict.section.name} already has ${sectionConflict.subject.name} scheduled at this time slot.`,
-                conflictingEntry: sectionConflict,
-            };
-        }
-        // 4. Faculty Leave Collision (Active Approved Leaves)
-        const faculty = await prisma_1.prisma.faculty.findUnique({
-            where: { id: data.facultyId },
-            include: { user: true },
-        });
-        if (faculty) {
-            const activeLeave = await prisma_1.prisma.facultyLeave.findFirst({
+        if (data.facultyId) {
+            const facultyConflict = await prisma_1.prisma.timetableEntry.findFirst({
                 where: {
-                    userId: faculty.userId,
-                    status: 'APPROVED',
+                    ...whereBase,
+                    facultyId: data.facultyId,
+                },
+                include: {
+                    class: true,
+                    section: true,
+                    subject: true,
+                    faculty: { include: { user: true } },
                 },
             });
-            // If needed, check leave date range against current semester
-            if (activeLeave && activeLeave.totalDays > 30) {
+            if (facultyConflict) {
                 return {
                     hasConflict: true,
-                    type: 'FACULTY_LEAVE_CONFLICT',
-                    message: `Faculty ${faculty.user.firstName} ${faculty.user.lastName} is currently on approved long-term leave (${activeLeave.leaveType}).`,
+                    type: 'FACULTY_CONFLICT',
+                    message: 'Faculty is already assigned to another class during this period.',
+                    conflictingEntry: facultyConflict,
                 };
             }
         }
-        // 5. Faculty Availability Violation
-        const unavailableSlot = await prisma_1.prisma.facultyAvailability.findFirst({
-            where: {
-                facultyId: data.facultyId,
-                academicYearId: data.academicYearId,
-                dayOfWeek: data.dayOfWeek,
-                isAvailable: false,
-                OR: [
-                    { timeSlotId: data.timeSlotId },
-                    { timeSlotId: null }, // whole day unavailable
-                ],
-            },
-        });
-        if (unavailableSlot) {
-            return {
-                hasConflict: true,
-                type: 'AVAILABILITY_CONFLICT',
-                message: `Faculty is marked unavailable on ${data.dayOfWeek}${unavailableSlot.reason ? ` (${unavailableSlot.reason})` : ''}.`,
-            };
+        // 2. Room Collision
+        if (data.roomId) {
+            const roomConflict = await prisma_1.prisma.timetableEntry.findFirst({
+                where: {
+                    ...whereBase,
+                    roomId: data.roomId,
+                },
+                include: {
+                    class: true,
+                    section: true,
+                    room: true,
+                },
+            });
+            if (roomConflict) {
+                return {
+                    hasConflict: true,
+                    type: 'ROOM_CONFLICT',
+                    message: `Room is already occupied by another class during this period.`,
+                    conflictingEntry: roomConflict,
+                };
+            }
+        }
+        // 3. Section Collision
+        if (data.sectionId) {
+            const sectionConflict = await prisma_1.prisma.timetableEntry.findFirst({
+                where: {
+                    ...whereBase,
+                    sectionId: data.sectionId,
+                    subjectId: { not: null },
+                },
+                include: {
+                    subject: true,
+                    section: true,
+                },
+            });
+            if (sectionConflict) {
+                return {
+                    hasConflict: true,
+                    type: 'SECTION_CONFLICT',
+                    message: `This class section already has a subject scheduled for this period.`,
+                    conflictingEntry: sectionConflict,
+                };
+            }
+        }
+        // 4. Faculty Leave Collision (Active Approved Leaves)
+        if (data.facultyId) {
+            const faculty = await prisma_1.prisma.faculty.findUnique({
+                where: { id: data.facultyId },
+                include: { user: true },
+            });
+            if (faculty) {
+                const activeLeave = await prisma_1.prisma.facultyLeave.findFirst({
+                    where: {
+                        userId: faculty.userId,
+                        status: 'APPROVED',
+                    },
+                });
+                if (activeLeave && activeLeave.totalDays > 30) {
+                    return {
+                        hasConflict: true,
+                        type: 'FACULTY_LEAVE_CONFLICT',
+                        message: `Faculty ${faculty.user.firstName} ${faculty.user.lastName} is currently on approved long-term leave (${activeLeave.leaveType}).`,
+                    };
+                }
+            }
+            // 5. Faculty Availability Violation
+            const unavailableSlot = await prisma_1.prisma.facultyAvailability.findFirst({
+                where: {
+                    facultyId: data.facultyId,
+                    academicYearId: data.academicYearId,
+                    dayOfWeek: data.dayOfWeek,
+                    isAvailable: false,
+                    OR: [
+                        { timeSlotId: data.timeSlotId },
+                        { timeSlotId: null },
+                    ],
+                },
+            });
+            if (unavailableSlot) {
+                return {
+                    hasConflict: true,
+                    type: 'AVAILABILITY_CONFLICT',
+                    message: `Faculty is marked unavailable on ${data.dayOfWeek}${unavailableSlot.reason ? ` (${unavailableSlot.reason})` : ''}.`,
+                };
+            }
+            // 6. Faculty Subject Assignment Eligibility (if assignments exist for this class)
+            if (data.classId && data.subjectId) {
+                const classSubjectAssignments = await prisma_1.prisma.facultySubjectAssignment.findMany({
+                    where: {
+                        academicYearId: data.academicYearId,
+                        classId: data.classId,
+                        subjectId: data.subjectId,
+                        status: 'ACTIVE',
+                    },
+                });
+                if (classSubjectAssignments.length > 0) {
+                    const isAssigned = classSubjectAssignments.some((a) => a.facultyId === data.facultyId);
+                    if (!isAssigned) {
+                        return {
+                            hasConflict: true,
+                            type: 'FACULTY_ELIGIBILITY_CONFLICT',
+                            message: 'Selected faculty is not authorized/assigned to teach this subject for this class.',
+                        };
+                    }
+                }
+            }
         }
         return { hasConflict: false };
     }
@@ -1059,10 +1407,11 @@ class AcademicService {
             include: { class: true },
         });
         const departmentId = data.departmentId || section?.class.departmentId || null;
+        const validActor = actorId ? await prisma_1.prisma.user.findUnique({ where: { id: actorId }, select: { id: true } }) : null;
         const entry = await prisma_1.prisma.timetableEntry.create({
             data: {
                 academicYearId: data.academicYearId,
-                departmentId,
+                departmentId: departmentId,
                 classId: data.classId,
                 sectionId: data.sectionId,
                 subjectId: data.subjectId,
@@ -1070,7 +1419,7 @@ class AcademicService {
                 roomId: data.roomId,
                 timeSlotId: data.timeSlotId,
                 dayOfWeek: data.dayOfWeek,
-                createdByUserId: actorId,
+                createdByUserId: validActor ? validActor.id : null,
             },
             include: {
                 class: true,
@@ -1100,9 +1449,9 @@ class AcademicService {
             academicYearId: existing.academicYearId,
             classId: existing.classId,
             sectionId: existing.sectionId,
-            subjectId: data.subjectId || existing.subjectId,
-            facultyId: data.facultyId || existing.facultyId,
-            roomId: data.roomId || existing.roomId,
+            subjectId: (data.subjectId || existing.subjectId) || undefined,
+            facultyId: (data.facultyId || existing.facultyId) || undefined,
+            roomId: (data.roomId || existing.roomId) || undefined,
             timeSlotId: data.timeSlotId || existing.timeSlotId,
             dayOfWeek: data.dayOfWeek || existing.dayOfWeek,
             excludeEntryId: id,
@@ -1531,22 +1880,13 @@ class AcademicService {
     // 12. STUDENTS ADMISSION INTAKE & MANAGEMENT (RETAINED FROM PHASE 3)
     // ----------------------------------------------------
     static async admitStudent(data, actorId, ipAddress) {
-        const existingAdm = await prisma_1.prisma.student.findUnique({ where: { admissionNumber: data.admissionNumber } });
-        if (existingAdm) {
-            throw new errorHandler_1.AppError(`Student with admission number '${data.admissionNumber}' already exists.`, 409, 'ADMISSION_NUM_EXISTS');
-        }
-        const enrollmentNumber = data.enrollmentNumber || `ENR-${Date.now().toString().slice(-6)}`;
-        const existingEnr = await prisma_1.prisma.student.findUnique({ where: { enrollmentNumber } });
-        if (existingEnr) {
-            throw new errorHandler_1.AppError(`Enrollment number '${enrollmentNumber}' is already in use.`, 409, 'ENROLLMENT_NUM_EXISTS');
-        }
         const existingEmail = await prisma_1.prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
         if (existingEmail) {
             throw new errorHandler_1.AppError('An account with this email already exists.', 409, 'EMAIL_EXISTS');
         }
         const section = await prisma_1.prisma.section.findUnique({
             where: { id: data.sectionId },
-            include: { class: true },
+            include: { class: { include: { academicYear: true } } },
         });
         if (!section) {
             throw new errorHandler_1.AppError('Invalid section ID provided.', 404, 'SECTION_NOT_FOUND');
@@ -1555,10 +1895,51 @@ class AcademicService {
         const academicYearId = data.academicYearId || section.class.academicYearId;
         const initialPassword = 'Student@Secure2026!';
         const passwordHash = await (0, password_1.hashPassword)(initialPassword);
-        const username = `std_${data.admissionNumber.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
-        const studentRole = (await prisma_1.prisma.role.findUnique({ where: { name: types_1.UserRoleEnum.PARENT } })) ||
-            (await prisma_1.prisma.role.findUnique({ where: { name: types_1.UserRoleEnum.NON_FACULTY } }));
+        const studentRole = (await prisma_1.prisma.role.findUnique({ where: { name: types_1.UserRoleEnum.STUDENT } })) ||
+            (await prisma_1.prisma.role.findUnique({ where: { name: 'STUDENT' } }));
         const result = await prisma_1.prisma.$transaction(async (tx) => {
+            // 1. Permanent 5-digit Campus ID Sequential Generation (00001, 00002...)
+            const allStudents = await tx.student.findMany({
+                select: { campusId: true },
+            });
+            let maxCampusSeq = 0;
+            for (const s of allStudents) {
+                if (s.campusId) {
+                    const num = parseInt(s.campusId, 10);
+                    if (!isNaN(num) && num > maxCampusSeq) {
+                        maxCampusSeq = num;
+                    }
+                }
+            }
+            const campusId = String(maxCampusSeq + 1).padStart(5, '0');
+            // 2. Academic Year Enrollment Number Generation (<Prefix><Sequence>)
+            const targetYear = await tx.academicYear.findUnique({ where: { id: academicYearId } });
+            let finalEnrollmentNumber = data.enrollmentNumber;
+            if (!finalEnrollmentNumber) {
+                const prefix = targetYear?.enrollmentPrefix || '26';
+                const seqLen = targetYear?.enrollmentSeqLength || 4;
+                const currentYearSeq = targetYear?.nextEnrollmentSeq || 1;
+                finalEnrollmentNumber = `${prefix}${String(currentYearSeq).padStart(seqLen, '0')}`;
+                if (targetYear) {
+                    await tx.academicYear.update({
+                        where: { id: academicYearId },
+                        data: { nextEnrollmentSeq: currentYearSeq + 1 },
+                    });
+                }
+            }
+            // Check enrollment number uniqueness
+            const existingEnr = await tx.student.findUnique({ where: { enrollmentNumber: finalEnrollmentNumber } });
+            if (existingEnr) {
+                throw new errorHandler_1.AppError(`Enrollment number '${finalEnrollmentNumber}' is already in use.`, 409, 'ENROLLMENT_NUM_EXISTS');
+            }
+            // 3. Admission Number (ADM-YYYY-XXXX or user provided)
+            const finalAdmissionNumber = data.admissionNumber || `ADM-${targetYear?.name?.slice(0, 4) || '2026'}-${campusId}`;
+            const existingAdm = await tx.student.findUnique({ where: { admissionNumber: finalAdmissionNumber } });
+            if (existingAdm) {
+                throw new errorHandler_1.AppError(`Student with admission number '${finalAdmissionNumber}' already exists.`, 409, 'ADMISSION_NUM_EXISTS');
+            }
+            const username = `std_${finalAdmissionNumber.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+            // 4. Create User
             const user = await tx.user.create({
                 data: {
                     email: data.email.toLowerCase(),
@@ -1574,6 +1955,7 @@ class AcademicService {
                     address: data.address || null,
                     userCategory: 'STUDENT',
                     status: types_1.UserStatusEnum.ACTIVE,
+                    activeRole: 'STUDENT',
                 },
             });
             if (studentRole) {
@@ -1587,11 +1969,13 @@ class AcademicService {
                     },
                 });
             }
+            // 5. Create Student record with permanent campusId and academic enrollmentNumber
             const student = await tx.student.create({
                 data: {
                     userId: user.id,
-                    admissionNumber: data.admissionNumber,
-                    enrollmentNumber,
+                    campusId,
+                    admissionNumber: finalAdmissionNumber,
+                    enrollmentNumber: finalEnrollmentNumber,
                     rollNumber: data.rollNumber || null,
                     academicYearId,
                     departmentId,
@@ -1607,18 +1991,24 @@ class AcademicService {
                     status: types_1.StudentStatusEnum.ACTIVE,
                 },
             });
-            await tx.guardian.create({
-                data: {
-                    studentId: student.id,
-                    fullName: data.guardian.fullName,
-                    relationship: data.guardian.relationship,
-                    phone: data.guardian.phone,
-                    email: data.guardian.email || null,
-                    occupation: data.guardian.occupation || null,
-                    address: data.guardian.address || null,
-                    isPrimary: true,
-                },
-            });
+            // 6. Create Primary Guardian if provided
+            if (data.guardian && data.guardian.fullName) {
+                await tx.guardian.create({
+                    data: {
+                        studentId: student.id,
+                        fullName: data.guardian.fullName,
+                        relationship: data.guardian.relationship || 'GUARDIAN',
+                        phone: data.guardian.phone || '—',
+                        email: data.guardian.email || null,
+                        occupation: data.guardian.occupation || null,
+                        address: data.guardian.address || null,
+                        isPrimary: true,
+                    },
+                });
+            }
+            // Check if actorId exists in user table
+            const validActor = actorId ? await tx.user.findUnique({ where: { id: actorId }, select: { id: true } }) : null;
+            // 7. Initial Enrollment Log
             await tx.studentTransferLog.create({
                 data: {
                     studentId: student.id,
@@ -1629,7 +2019,7 @@ class AcademicService {
                     toStatus: types_1.StudentStatusEnum.ACTIVE,
                     transferType: 'PROMOTION',
                     reason: 'Initial enrollment & section allocation.',
-                    transferredByUserId: actorId,
+                    transferredByUserId: validActor ? validActor.id : null,
                 },
             });
             return { user, student };
@@ -1640,8 +2030,9 @@ class AcademicService {
             entityType: 'Student',
             entityId: result.student.id,
             afterState: {
-                admissionNumber: data.admissionNumber,
-                enrollmentNumber,
+                campusId: result.student.campusId,
+                admissionNumber: result.student.admissionNumber,
+                enrollmentNumber: result.student.enrollmentNumber,
                 sectionId: data.sectionId,
                 classId: section.classId,
             },
@@ -1668,6 +2059,7 @@ class AcademicService {
             const s = query.search.trim();
             const sDigits = s.replace(/[^0-9a-zA-Z]/g, '');
             where.OR = [
+                { campusId: { contains: s } },
                 { admissionNumber: { contains: s } },
                 { enrollmentNumber: { contains: s } },
                 { rollNumber: { contains: s } },
@@ -1689,7 +2081,7 @@ class AcademicService {
                 where,
                 skip,
                 take: limit,
-                orderBy: { admissionNumber: 'asc' },
+                orderBy: { createdAt: 'desc' },
                 include: {
                     user: {
                         select: {
@@ -1798,15 +2190,32 @@ class AcademicService {
         const toDeptId = params.toDepartmentId || newSection.class.departmentId || null;
         const toYearId = params.toAcademicYearId || newSection.class.academicYearId;
         const updated = await prisma_1.prisma.$transaction(async (tx) => {
+            let newEnrollmentNumber = student.enrollmentNumber;
+            // If moving to a new academic year (Promotion/Year transfer), issue new academic year enrollment number
+            if (toYearId && toYearId !== fromYearId) {
+                const destYear = await tx.academicYear.findUnique({ where: { id: toYearId } });
+                if (destYear) {
+                    const prefix = destYear.enrollmentPrefix || '27';
+                    const seqLen = destYear.enrollmentSeqLength || 4;
+                    const currentSeq = destYear.nextEnrollmentSeq || 1;
+                    newEnrollmentNumber = `${prefix}${String(currentSeq).padStart(seqLen, '0')}`;
+                    await tx.academicYear.update({
+                        where: { id: toYearId },
+                        data: { nextEnrollmentSeq: currentSeq + 1 },
+                    });
+                }
+            }
             const s = await tx.student.update({
                 where: { id: student.id },
                 data: {
                     sectionId: newSection.id,
                     departmentId: toDeptId,
                     academicYearId: toYearId,
+                    enrollmentNumber: newEnrollmentNumber,
                     status: types_1.StudentStatusEnum.ACTIVE,
                 },
             });
+            const validActor = params.actorId ? await tx.user.findUnique({ where: { id: params.actorId }, select: { id: true } }) : null;
             await tx.studentTransferLog.create({
                 data: {
                     studentId: student.id,
@@ -1822,7 +2231,7 @@ class AcademicService {
                     toStatus: types_1.StudentStatusEnum.ACTIVE,
                     transferType: params.transferType || types_1.StudentTransferTypeEnum.SECTION_TRANSFER,
                     reason: params.reason,
-                    transferredByUserId: params.actorId,
+                    transferredByUserId: validActor ? validActor.id : null,
                 },
             });
             return s;

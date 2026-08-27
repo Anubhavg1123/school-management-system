@@ -21,6 +21,7 @@ router.get('/:id', user_controller_1.UserController.getUser);
 router.put('/:id', (0, validate_1.validateRequest)({ body: user_controller_1.updateUserSchema }), user_controller_1.UserController.updateProfile);
 // Super Admin actions
 router.patch('/:id/status', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN]), (0, validate_1.validateRequest)({ body: user_controller_1.updateStatusSchema }), user_controller_1.UserController.updateStatus);
+router.post('/:id/assign-role', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN]), (0, validate_1.validateRequest)({ body: user_controller_1.assignOperationalRoleSchema }), user_controller_1.UserController.assignOperationalRole);
 router.post('/:id/roles', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN]), (0, validate_1.validateRequest)({ body: user_controller_1.assignRolesSchema }), user_controller_1.UserController.assignRoles);
 router.post('/:id/reset-password', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN]), (0, validate_1.validateRequest)({ body: user_controller_1.resetPasswordSchema }), user_controller_1.UserController.resetPassword);
 router.get('/:id/audit', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN]), user_controller_1.UserController.getUserAuditTrail);

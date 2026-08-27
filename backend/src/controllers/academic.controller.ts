@@ -119,6 +119,13 @@ export const createTimeSlotSchema = z.object({
   isBreak: z.boolean().optional(),
 });
 
+export const updateTimeSlotSchema = z.object({
+  name: z.string().optional(),
+  startTime: z.string().min(4).optional(),
+  endTime: z.string().min(4).optional(),
+  isBreak: z.boolean().optional(),
+});
+
 export const setFacultyAvailabilitySchema = z.object({
   facultyId: z.string().min(1, 'Faculty ID required'),
   academicYearId: z.string().min(1, 'Academic year required'),
@@ -657,6 +664,37 @@ export class AcademicController {
       const days = req.body.days;
       const slots = await AcademicService.generateDefaultTimeSlots(academicYearId, days, req.user!.id);
       return sendSuccess(res, slots, 201);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async updateTimeSlot(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const ipAddress = req.ip || req.socket.remoteAddress;
+      const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+      const slot = await AcademicService.updateTimeSlot(
+        id,
+        req.body,
+        req.user!.id,
+        typeof ipAddress === 'string' ? ipAddress : undefined
+      );
+      return sendSuccess(res, slot, 200);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  static async deleteTimeSlot(req: AuthRequest, res: Response, next: NextFunction) {
+    try {
+      const ipAddress = req.ip || req.socket.remoteAddress;
+      const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+      const result = await AcademicService.deleteTimeSlot(
+        id,
+        req.user!.id,
+        typeof ipAddress === 'string' ? ipAddress : undefined
+      );
+      return sendSuccess(res, result, 200);
     } catch (error) {
       next(error);
     }

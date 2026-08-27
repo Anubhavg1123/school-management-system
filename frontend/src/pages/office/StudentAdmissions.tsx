@@ -417,16 +417,6 @@ export const StudentAdmissions: React.FC = () => {
             </div>
             <div>
               <Select
-                value={selectedDeptId}
-                onChange={(e) => setSelectedDeptId(e.target.value)}
-                options={[
-                  { value: '', label: 'All Departments' },
-                  ...departments.map((d) => ({ value: d.id, label: d.name })),
-                ]}
-              />
-            </div>
-            <div>
-              <Select
                 value={selectedStatus}
                 onChange={(e) => setSelectedStatus(e.target.value)}
                 options={[
@@ -462,7 +452,6 @@ export const StudentAdmissions: React.FC = () => {
                   <th className="p-3.5">Student Identity</th>
                   <th className="p-3.5">Campus ID / Enrollment #</th>
                   <th className="p-3.5">Class & Section</th>
-                  <th className="p-3.5">Department</th>
                   <th className="p-3.5">Primary Guardian</th>
                   <th className="p-3.5">Status</th>
                   <th className="p-3.5 text-right">Actions</th>
@@ -504,16 +493,6 @@ export const StudentAdmissions: React.FC = () => {
                         </div>
                       ) : (
                         <span className="text-slate-400 italic">Unassigned</span>
-                      )}
-                    </td>
-                    <td className="p-3.5 text-slate-600">
-                      {s.department ? (
-                        <div className="flex items-center gap-1 text-slate-700">
-                          <Building2 className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{s.department.name}</span>
-                        </div>
-                      ) : (
-                        <span className="text-slate-400">—</span>
                       )}
                     </td>
                     <td className="p-3.5">

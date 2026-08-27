@@ -29,6 +29,7 @@ class StudentAttendanceService {
                 academicYearId: activeYearId,
                 dayOfWeek,
                 status: 'ACTIVE',
+                subjectId: { not: null },
             },
             include: {
                 timeSlot: true,
@@ -40,6 +41,8 @@ class StudentAttendanceService {
         });
         const generatedSlots = [];
         for (const entry of entries) {
+            if (!entry.subjectId)
+                continue;
             // Check if substitute faculty assignment exists for this date and time slot
             let assignedFacultyId = entry.facultyId;
             const substitute = await prisma.substituteFacultyAssignment.findFirst({
@@ -54,6 +57,8 @@ class StudentAttendanceService {
             if (substitute) {
                 assignedFacultyId = substitute.substituteFacultyId;
             }
+            if (!assignedFacultyId)
+                continue;
             // Idempotent creation/upsert
             const slot = await prisma.attendanceSlot.upsert({
                 where: {
@@ -374,6 +379,9 @@ class StudentAttendanceService {
             const records = [];
             const absentEvents = [];
             for (const stdRec of data.studentRecords) {
+                if (stdRec.status !== 'PRESENT' && stdRec.status !== 'ABSENT') {
+                    throw new errorHandler_1.AppError(`Invalid attendance status '${stdRec.status}'. Normal faculty roll call only allows PRESENT or ABSENT.`, 400, 'INVALID_ATTENDANCE_STATUS');
+                }
                 // Upsert student attendance
                 const item = await tx.studentAttendance.upsert({
                     where: {
@@ -509,12 +517,153 @@ class StudentAttendanceService {
         return updatedCorrection;
     }
     // ----------------------------------------------------
-    // 7. ACADEMIC BYPASS REQUEST WORKFLOW
+    // 7. CLASS COORDINATOR SCHOOL ACTIVITY / ACADEMIC BYPASS WORKFLOW
+    // ----------------------------------------------------
+    static async applySchoolActivityBypass(data, userCtx, ipAddress) {
+        const student = await prisma.student.findUnique({
+            where: { id: data.studentId },
+            include: { section: { include: { class: true } } },
+        });
+        if (!student) {
+            throw new errorHandler_1.AppError('Student not found.', 404, 'STUDENT_NOT_FOUND');
+        }
+        const validActivities = [
+            'SPORTS',
+            'ACADEMIC_EVENT',
+            'SCHOOL_EVENT',
+            'COMPETITION',
+            'OFFICIAL_SCHOOL_ACTIVITY',
+            'OTHER_SCHOOL_APPROVED_ACTIVITY',
+        ];
+        if (!validActivities.includes(data.activityType)) {
+            throw new errorHandler_1.AppError(`Invalid activity type '${data.activityType}'. Allowed: ${validActivities.join(', ')}`, 400, 'INVALID_ACTIVITY_TYPE');
+        }
+        const trimmedReason = (data.reason || '').trim();
+        if (trimmedReason.length < 5) {
+            throw new errorHandler_1.AppError('A mandatory explanation (at least 5 characters) must be provided for school activity bypass.', 400, 'EMPTY_BYPASS_REASON');
+        }
+        // Disallow casual or personal excuses
+        const forbiddenCasualRegex = /^\s*(personal|casual|unknown|personal\s+work|casual\s+leave|personal\s+reason)\s*$/i;
+        if (forbiddenCasualRegex.test(trimmedReason)) {
+            throw new errorHandler_1.AppError('Bypass requires a legitimate institution-approved academic/school activity reason. Personal or casual reasons are not permitted.', 400, 'INVALID_BYPASS_REASON');
+        }
+        // Role & Assignment Authorization Check
+        if (userCtx.activeRole === 'SUPER_ADMIN' || userCtx.activeRole === 'OFFICE_ADMIN') {
+            // Super Admin and Office Admin have institutional administrative authority
+        }
+        else if (userCtx.activeRole === 'HOD') {
+            if (student.departmentId && userCtx.departmentId && student.departmentId !== userCtx.departmentId) {
+                throw new errorHandler_1.AppError('Department authorization violation: Cannot apply bypass for students outside your department.', 403, 'DEPARTMENT_AUTHORIZATION_VIOLATION');
+            }
+        }
+        else if (userCtx.activeRole === 'FACULTY') {
+            const faculty = await prisma.faculty.findUnique({ where: { userId: userCtx.id } });
+            if (!faculty) {
+                throw new errorHandler_1.AppError('Faculty profile not found for authenticated user.', 403, 'FACULTY_NOT_FOUND');
+            }
+            if (!student.sectionId) {
+                throw new errorHandler_1.AppError('Student is not enrolled in any class section.', 400, 'NO_STUDENT_SECTION');
+            }
+            const section = await prisma.section.findUnique({ where: { id: student.sectionId } });
+            if (!section || section.coordinatorFacultyId !== faculty.id) {
+                throw new errorHandler_1.AppError('Authorization violation: Only the assigned Class Coordinator of this section or higher administrator can apply school activity bypass.', 403, 'COORDINATOR_AUTHORIZATION_REQUIRED');
+            }
+        }
+        else {
+            throw new errorHandler_1.AppError('Access Denied: You do not have permission to apply school activity attendance bypass.', 403, 'FORBIDDEN');
+        }
+        // Apply bypass in transaction
+        const result = await prisma.$transaction(async (tx) => {
+            // 1. Create approved bypass record
+            const bypassRecord = await tx.academicBypassRequest.create({
+                data: {
+                    studentId: data.studentId,
+                    attendanceSlotId: data.attendanceSlotId || null,
+                    date: data.date,
+                    activityName: data.activityType,
+                    reason: trimmedReason,
+                    status: 'APPROVED',
+                    requestedByUserId: userCtx.id,
+                    approvedByUserId: userCtx.id,
+                },
+                include: {
+                    student: { include: { user: true } },
+                },
+            });
+            // 2. If attendanceSlotId is provided, mark/update student attendance
+            let attendanceRecord = null;
+            if (data.attendanceSlotId) {
+                attendanceRecord = await tx.studentAttendance.upsert({
+                    where: {
+                        attendanceSlotId_studentId: {
+                            attendanceSlotId: data.attendanceSlotId,
+                            studentId: data.studentId,
+                        },
+                    },
+                    update: {
+                        status: 'PRESENT',
+                        remarks: `[School Activity Bypass: ${data.activityType}] ${trimmedReason}`,
+                        markedByUserId: userCtx.id,
+                    },
+                    create: {
+                        attendanceSlotId: data.attendanceSlotId,
+                        studentId: data.studentId,
+                        status: 'PRESENT',
+                        remarks: `[School Activity Bypass: ${data.activityType}] ${trimmedReason}`,
+                        markedByUserId: userCtx.id,
+                    },
+                });
+            }
+            return { bypassRecord, attendanceRecord };
+        });
+        await audit_service_1.AuditService.log({
+            userId: userCtx.id,
+            action: 'CLASS_COORDINATOR_SCHOOL_ACTIVITY_BYPASS',
+            entityType: 'AcademicBypassRequest',
+            entityId: result.bypassRecord.id,
+            afterState: {
+                studentId: data.studentId,
+                activityType: data.activityType,
+                reason: trimmedReason,
+                attendanceSlotId: data.attendanceSlotId,
+                date: data.date,
+            },
+            ipAddress,
+        });
+        return {
+            message: 'School activity attendance bypass applied successfully.',
+            bypass: result.bypassRecord,
+            attendance: result.attendanceRecord,
+        };
+    }
+    // ----------------------------------------------------
+    // 8. ACADEMIC BYPASS REQUEST WORKFLOW
     // ----------------------------------------------------
     static async requestAcademicBypass(data, actorId, ipAddress) {
         const student = await prisma.student.findUnique({ where: { id: data.studentId } });
         if (!student) {
             throw new errorHandler_1.AppError('Student not found.', 404, 'STUDENT_NOT_FOUND');
+        }
+        // Verify actor is either SUPER_ADMIN/OFFICE_ADMIN or the assigned Class Coordinator for this student's section
+        const actorUser = await prisma.user.findUnique({
+            where: { id: actorId },
+            include: { userRoles: { include: { role: true } }, facultyProfile: true },
+        });
+        const isSuperAdmin = actorUser?.userRoles.some((ur) => ur.role.name === 'SUPER_ADMIN' || ur.role.name === 'OFFICE_ADMIN');
+        if (!isSuperAdmin) {
+            if (!actorUser?.facultyProfile) {
+                throw new errorHandler_1.AppError('Only authorized Class Coordinators or Administrators can request academic bypass.', 403, 'COORDINATOR_AUTHORIZATION_REQUIRED');
+            }
+            const isCoordinator = await prisma.classCoordinatorHistory.findFirst({
+                where: {
+                    sectionId: student.sectionId || '',
+                    facultyId: actorUser.facultyProfile.id,
+                    status: 'ACTIVE',
+                },
+            });
+            if (!isCoordinator) {
+                throw new errorHandler_1.AppError('Authorization violation: You can only request Academic Bypass for students in your assigned Class/Section.', 403, 'UNAUTHORIZED_CLASS_COORDINATOR');
+            }
         }
         const bypass = await prisma.academicBypassRequest.create({
             data: {

@@ -8,11 +8,13 @@ var UserRoleEnum;
     UserRoleEnum["HOD"] = "HOD";
     UserRoleEnum["FACULTY"] = "FACULTY";
     UserRoleEnum["NON_FACULTY"] = "NON_FACULTY";
+    UserRoleEnum["STUDENT"] = "STUDENT";
     UserRoleEnum["PARENT"] = "PARENT";
 })(UserRoleEnum || (exports.UserRoleEnum = UserRoleEnum = {}));
 var UserStatusEnum;
 (function (UserStatusEnum) {
     UserStatusEnum["PENDING_APPROVAL"] = "PENDING_APPROVAL";
+    UserStatusEnum["APPROVED_PENDING_ROLE"] = "APPROVED_PENDING_ROLE";
     UserStatusEnum["ACTIVE"] = "ACTIVE";
     UserStatusEnum["INACTIVE"] = "INACTIVE";
     UserStatusEnum["SUSPENDED"] = "SUSPENDED";
@@ -30,6 +32,7 @@ var RegistrationStatusEnum;
 (function (RegistrationStatusEnum) {
     RegistrationStatusEnum["PENDING"] = "PENDING";
     RegistrationStatusEnum["UNDER_REVIEW"] = "UNDER_REVIEW";
+    RegistrationStatusEnum["APPROVED_PENDING_ROLE"] = "APPROVED_PENDING_ROLE";
     RegistrationStatusEnum["APPROVED"] = "APPROVED";
     RegistrationStatusEnum["REJECTED"] = "REJECTED";
 })(RegistrationStatusEnum || (exports.RegistrationStatusEnum = RegistrationStatusEnum = {}));

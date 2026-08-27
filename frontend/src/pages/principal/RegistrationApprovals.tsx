@@ -642,23 +642,12 @@ export const RegistrationApprovals: React.FC = () => {
                       { value: 'OTHER_NON_FACULTY', label: 'Other Non-Faculty' },
                     ]}
                   />
-                ) : approveRole === 'FACULTY' ? (
-                  <Select
-                    label="Assign Academic Department *"
-                    required
-                    value={approveDeptId}
-                    onChange={(e) => setApproveDeptId(e.target.value)}
-                    options={[
-                      { value: '', label: 'Select Academic Department' },
-                      ...departments.map((d) => ({ value: d.id, label: `${d.name} (${d.code})` })),
-                    ]}
-                  />
                 ) : (
                   <Input
                     label="Designation / Title"
                     value={approveDesignation}
                     onChange={(e) => setApproveDesignation(e.target.value)}
-                    placeholder="e.g. Office Administrator"
+                    placeholder={approveRole === 'FACULTY' ? 'e.g. Mathematics Teacher / Primary Teacher' : 'e.g. Office Administrator'}
                   />
                 )}
               </div>

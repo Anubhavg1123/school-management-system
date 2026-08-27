@@ -47,14 +47,26 @@ describe('Attendance Rules & Class Coordinator Permissions Test Suite', () => {
     await prisma.timetableEntry.deleteMany({});
     await prisma.facultyAvailability.deleteMany({});
     await prisma.facultySubjectAssignment.deleteMany({});
-    await prisma.classCoordinatorHistory.deleteMany({});
-    await prisma.student.deleteMany({ where: { user: { email: { in: testEmails } } } });
+    await prisma.student.deleteMany({
+      where: {
+        OR: [
+          { user: { email: { in: testEmails } } },
+          { admissionNumber: { in: ['ADM-1001', 'ADM-1002'] } },
+        ],
+      },
+    });
     await prisma.section.deleteMany({ where: { name: { in: ['Section A', 'Section B'] } } });
     await prisma.classSubject.deleteMany({});
     await prisma.class.deleteMany({ where: { code: 'G10' } });
     await prisma.subject.deleteMany({ where: { code: 'MATH101' } });
-    await prisma.timeSlot.deleteMany({});
-    await prisma.faculty.deleteMany({ where: { user: { email: { in: testEmails } } } });
+    await prisma.faculty.deleteMany({
+      where: {
+        OR: [
+          { user: { email: { in: testEmails } } },
+          { employeeCode: { in: ['FAC-001', 'FAC-002', 'FAC-003'] } },
+        ],
+      },
+    });
     await prisma.userRole.deleteMany({ where: { user: { email: { in: testEmails } } } });
     await prisma.user.deleteMany({ where: { email: { in: testEmails } } });
 
@@ -239,16 +251,30 @@ describe('Attendance Rules & Class Coordinator Permissions Test Suite', () => {
       },
     });
 
-    subject = await prisma.subject.create({
-      data: {
+    subject = await prisma.subject.upsert({
+      where: { code: 'MATH101' },
+      update: { name: 'Mathematics', type: 'THEORY' },
+      create: {
         code: 'MATH101',
         name: 'Mathematics',
         type: 'THEORY',
       },
     });
 
-    timeSlot = await prisma.timeSlot.create({
-      data: {
+    timeSlot = await prisma.timeSlot.upsert({
+      where: {
+        academicYearId_dayOfWeek_periodNumber: {
+          academicYearId: academicYear.id,
+          dayOfWeek: 'MONDAY',
+          periodNumber: 1,
+        },
+      },
+      update: {
+        name: 'Period 1',
+        startTime: '09:00',
+        endTime: '10:00',
+      },
+      create: {
         academicYearId: academicYear.id,
         dayOfWeek: 'MONDAY',
         periodNumber: 1,

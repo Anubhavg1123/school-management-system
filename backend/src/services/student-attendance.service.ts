@@ -787,6 +787,28 @@ export class StudentAttendanceService {
       throw new AppError('Student not found.', 404, 'STUDENT_NOT_FOUND');
     }
 
+    // Verify actor is either SUPER_ADMIN/OFFICE_ADMIN or the assigned Class Coordinator for this student's section
+    const actorUser = await prisma.user.findUnique({
+      where: { id: actorId },
+      include: { userRoles: { include: { role: true } }, facultyProfile: true },
+    });
+    const isSuperAdmin = actorUser?.userRoles.some((ur) => ur.role.name === 'SUPER_ADMIN' || ur.role.name === 'OFFICE_ADMIN');
+    if (!isSuperAdmin) {
+      if (!actorUser?.facultyProfile) {
+        throw new AppError('Only authorized Class Coordinators or Administrators can request academic bypass.', 403, 'COORDINATOR_AUTHORIZATION_REQUIRED');
+      }
+      const isCoordinator = await prisma.classCoordinatorHistory.findFirst({
+        where: {
+          sectionId: student.sectionId || '',
+          facultyId: actorUser.facultyProfile.id,
+          status: 'ACTIVE',
+        },
+      });
+      if (!isCoordinator) {
+        throw new AppError('Authorization violation: You can only request Academic Bypass for students in your assigned Class/Section.', 403, 'UNAUTHORIZED_CLASS_COORDINATOR');
+      }
+    }
+
     const bypass = await prisma.academicBypassRequest.create({
       data: {
         studentId: data.studentId,

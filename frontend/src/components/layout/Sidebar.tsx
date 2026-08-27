@@ -47,18 +47,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
       case UserRoleEnum.SUPER_ADMIN:
         return [
           { label: 'Executive Dashboard', path: '/principal', icon: <LayoutDashboard className="w-4 h-4" /> },
-          { label: 'Go-Live Readiness', path: '/principal/go-live', icon: <ShieldCheck className="w-4 h-4 text-emerald-400" /> },
           { label: 'Smart Insights Hub', path: '/principal/insights', icon: <TrendingUp className="w-4 h-4 text-violet-400" /> },
           { label: 'Emergency Alerts', path: '/principal/emergency', icon: <AlertTriangle className="w-4 h-4 text-red-500" /> },
           { label: 'Student Cases', path: '/principal/cases', icon: <Users className="w-4 h-4 text-blue-400" /> },
           { label: 'Smart Campus Ops', path: '/principal/smart-campus', icon: <Building2 className="w-4 h-4 text-emerald-400" /> },
-          { label: 'System Diagnostics', path: '/principal/diagnostics', icon: <CheckCircle className="w-4 h-4 text-indigo-400" /> },
-          { label: 'Feature Flags', path: '/principal/feature-flags', icon: <Sliders className="w-4 h-4 text-amber-400" /> },
           { label: 'Approvals Command Center', path: '/principal/approvals', icon: <UserCheck className="w-4 h-4" /> },
           { label: 'User Directory & IAM', path: '/principal/users', icon: <Users className="w-4 h-4" /> },
           { label: 'Student Roll Call', path: '/faculty/roll-call', icon: <UserCheck className="w-4 h-4" /> },
           { label: 'Fee Management', path: '/principal/fees', icon: <Wallet className="w-4 h-4" /> },
-          { label: 'Departments', path: '/principal/departments', icon: <Building2 className="w-4 h-4" /> },
+          { label: 'Academic Classes & Sections', path: '/office/academic', icon: <BookOpen className="w-4 h-4" /> },
           { label: 'Timetable & Schedule', path: '/principal/timetable', icon: <Calendar className="w-4 h-4" /> },
           { label: 'Notice Board', path: '/communication/notices', icon: <FileText className="w-4 h-4" /> },
           { label: 'Notifications', path: '/communication/notifications', icon: <Bell className="w-4 h-4" /> },
@@ -98,7 +95,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           { label: 'Admissions & Enrollment', path: '/office/admissions', icon: <GraduationCap className="w-4 h-4" /> },
           { label: 'Student Roll Call', path: '/faculty/roll-call', icon: <UserCheck className="w-4 h-4" /> },
           { label: 'Fee Management', path: '/office/fees', icon: <Wallet className="w-4 h-4" /> },
-          { label: 'Academic Structure', path: '/office/academic', icon: <BookOpen className="w-4 h-4" /> },
+          { label: 'Academic Classes & Sections', path: '/office/academic', icon: <BookOpen className="w-4 h-4" /> },
           { label: 'Timetable Scheduling', path: '/office/timetable', icon: <Calendar className="w-4 h-4" /> },
           { label: 'Student Directory', path: '/office/students', icon: <Users className="w-4 h-4" /> },
           { label: 'Attendance Review Hub', path: '/attendance/corrections', icon: <Award className="w-4 h-4" /> },
@@ -107,19 +104,6 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           { label: 'Bulk Data Migration', path: '/office/data-import', icon: <GraduationCap className="w-4 h-4 text-cyan-400" /> },
           { label: 'Helpdesk & Support', path: '/office/support', icon: <MessageSquare className="w-4 h-4 text-teal-400" /> },
           { label: 'Attendance Records', path: '/office/attendance', icon: <CalendarCheck className="w-4 h-4" /> },
-        ];
-      case UserRoleEnum.HOD:
-        return [
-          { label: 'Department Dashboard', path: '/hod', icon: <LayoutDashboard className="w-4 h-4" /> },
-          { label: 'Academic Calendar', path: '/principal/calendar', icon: <Calendar className="w-4 h-4 text-emerald-400" /> },
-          { label: 'Notice Board', path: '/communication/notices', icon: <FileText className="w-4 h-4" /> },
-          { label: 'Notifications', path: '/communication/notifications', icon: <Bell className="w-4 h-4" /> },
-          { label: 'Department Faculty', path: '/hod/faculty', icon: <Users className="w-4 h-4" /> },
-          { label: 'Department Students', path: '/hod/students', icon: <GraduationCap className="w-4 h-4" /> },
-          { label: 'Approvals Command Center', path: '/hod/approvals', icon: <Award className="w-4 h-4" /> },
-          { label: 'Department Timetable', path: '/hod/timetable', icon: <Calendar className="w-4 h-4" /> },
-          { label: 'Department Reports', path: '/reports', icon: <FileSpreadsheet className="w-4 h-4" /> },
-          { label: 'Support & Helpdesk', path: '/support', icon: <MessageSquare className="w-4 h-4" /> },
         ];
       case UserRoleEnum.FACULTY:
         return [

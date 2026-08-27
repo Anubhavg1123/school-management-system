@@ -28,7 +28,14 @@ export const academicApi = {
     const res = await apiClient.get('/academic/years');
     return res.data;
   },
-  createYear: async (data: { name: string; startDate: string; endDate: string; isCurrent?: boolean }) => {
+  createYear: async (data: {
+    name: string;
+    startDate: string;
+    endDate: string;
+    isCurrent?: boolean;
+    enrollmentPrefix?: string;
+    enrollmentSeqLength?: number;
+  }) => {
     const res = await apiClient.post('/academic/years', data);
     return res.data;
   },
@@ -42,8 +49,19 @@ export const academicApi = {
     const res = await apiClient.get('/academic/classes', { params: { departmentId, academicYearId } });
     return res.data;
   },
-  createClass: async (data: { name: string; code: string; departmentId?: string; academicYearId: string }) => {
+  createClass: async (data: {
+    name: string;
+    code: string;
+    departmentId?: string;
+    academicYearId: string;
+    order?: number;
+    educationLevel?: string;
+  }) => {
     const res = await apiClient.post('/academic/classes', data);
+    return res.data;
+  },
+  getFaculty: async (departmentId?: string) => {
+    const res = await apiClient.get('/academic/faculty', { params: { departmentId } });
     return res.data;
   },
   getSections: async (classId?: string) => {
@@ -156,6 +174,14 @@ export const academicApi = {
     isBreak?: boolean;
   }) => {
     const res = await apiClient.post('/academic/time-slots', data);
+    return res.data;
+  },
+  updateTimeSlot: async (id: string, data: { name?: string; startTime?: string; endTime?: string; isBreak?: boolean }) => {
+    const res = await apiClient.put(`/academic/time-slots/${id}`, data);
+    return res.data;
+  },
+  deleteTimeSlot: async (id: string) => {
+    const res = await apiClient.delete(`/academic/time-slots/${id}`);
     return res.data;
   },
   generateDefaultTimeSlots: async (academicYearId: string, days?: string[]) => {

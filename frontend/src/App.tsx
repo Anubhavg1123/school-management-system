@@ -16,7 +16,7 @@ import { Profile } from './pages/profile/Profile';
 import { PrincipalDashboard } from './pages/principal/PrincipalDashboard';
 import { RegistrationApprovals } from './pages/principal/RegistrationApprovals';
 import { UserManagement } from './pages/principal/UserManagement';
-import { DepartmentManagement } from './pages/principal/DepartmentManagement';
+import { DepartmentManagement as AcademicStructurePage } from './pages/principal/DepartmentManagement';
 import { AuditLogs } from './pages/principal/AuditLogs';
 import { SystemSettings } from './pages/principal/SystemSettings';
 import { PrincipalAttendance } from './pages/principal/PrincipalAttendance';
@@ -32,14 +32,6 @@ import { FeeManagement } from './pages/office/FeeManagement';
 // Academic / Timetable Pages
 import { TimetableManagement } from './pages/academic/TimetableManagement';
 
-// HOD Pages
-import { HodDashboard } from './pages/hod/HodDashboard';
-import { DepartmentFaculty } from './pages/hod/DepartmentFaculty';
-import { DepartmentStudents } from './pages/hod/DepartmentStudents';
-import { DepartmentApprovals } from './pages/hod/DepartmentApprovals';
-import { DepartmentTimetable } from './pages/hod/DepartmentTimetable';
-import { DepartmentReports } from './pages/hod/DepartmentReports';
-
 // Faculty Pages
 import { FacultyDashboard } from './pages/faculty/FacultyDashboard';
 import { FacultyRollCall } from './pages/faculty/FacultyRollCall';
@@ -47,23 +39,23 @@ import { MyClasses } from './pages/faculty/MyClasses';
 import { AssignmentManagement } from './pages/faculty/AssignmentManagement';
 import { FacultyServices } from './pages/faculty/FacultyServices';
 
-// Phase 6 Attendance Pages
+// Attendance Pages
 import { AttendanceCorrectionHub } from './pages/attendance/AttendanceCorrectionHub';
 import { AttendanceAnalytics } from './pages/attendance/AttendanceAnalytics';
 
-// Phase 9 Non-Faculty & Operational Hub Pages
+// Non-Faculty & Operational Hub Pages
 import { NonFacultyDashboard } from './pages/non-faculty/NonFacultyDashboard';
 import { DriverPortal } from './pages/non-faculty/DriverPortal';
 import { AttenderPortal } from './pages/non-faculty/AttenderPortal';
 import { SecurityPortal } from './pages/non-faculty/SecurityPortal';
 import { FleetManagement } from './pages/non-faculty/FleetManagement';
 
-// Phase 10 Communication & Notification Platform Pages
+// Communication & Notification Platform Pages
 import { NotificationCenter } from './pages/communication/NotificationCenter';
 import { NoticeBoard } from './pages/communication/NoticeBoard';
 import { CommunicationDashboard } from './pages/communication/CommunicationDashboard';
 
-// Phase 12 Examination & Results Pages
+// Examination & Results Pages
 import { ExamManagement } from './pages/exam/ExamManagement';
 import { FacultyMarksEntry } from './pages/exam/FacultyMarksEntry';
 import { MarksVerificationHub } from './pages/exam/MarksVerificationHub';
@@ -71,7 +63,7 @@ import { ResultPublicationHub } from './pages/exam/ResultPublicationHub';
 import { StudentResultView } from './pages/exam/StudentResultView';
 import { AcademicPerformanceDashboard } from './pages/exam/AcademicPerformanceDashboard';
 
-// Phase 13 Student & Guardian Portal Pages
+// Student & Guardian Portal Pages
 import { StudentDashboard } from './pages/student/StudentDashboard';
 import { StudentAttendanceView } from './pages/student/StudentAttendanceView';
 import { StudentAssignmentsView } from './pages/student/StudentAssignmentsView';
@@ -79,25 +71,22 @@ import { StudentProfilePage } from './pages/student/StudentProfilePage';
 import { GuardianDashboard } from './pages/guardian/GuardianDashboard';
 import { GuardianPreferences } from './pages/guardian/GuardianPreferences';
 
-// Phase 15 Institutional Integration & Operations Pages
-import { GoLiveReadiness } from './pages/principal/GoLiveReadiness';
+// Institutional Integration & Operations Pages
 import { ReportCenter } from './pages/principal/ReportCenter';
 import { ReconciliationDashboard } from './pages/principal/ReconciliationDashboard';
 import { DataImportPage } from './pages/principal/DataImportPage';
 import { SupportTicketPage } from './pages/staff/SupportTicketPage';
 import { SupportManagement } from './pages/office/SupportManagement';
 
-// Phase 16 Smart Operations Pages
+// Smart Operations Pages
 import { SmartInsightsHub } from './pages/principal/SmartInsightsHub';
 import { EmergencyBroadcastPage } from './pages/principal/EmergencyBroadcastPage';
 import { StudentCaseManagement } from './pages/principal/StudentCaseManagement';
 import { SmartCampusOperations } from './pages/principal/SmartCampusOperations';
-import { SystemDiagnosticsPage } from './pages/principal/SystemDiagnosticsPage';
-import { FeatureFlagsPage } from './pages/principal/FeatureFlagsPage';
 import { DriverMobileView } from './pages/non-faculty/DriverMobileView';
 import { SecurityMobileView } from './pages/non-faculty/SecurityMobileView';
 
-// Phase 17 Institutional Intelligence & Operations Pages
+// Institutional Intelligence & Operations Pages
 import { InstitutionalCalendarPage } from './pages/principal/InstitutionalCalendarPage';
 import { AdvancedWorkflowsPage } from './pages/principal/AdvancedWorkflowsPage';
 import { StudentStaffLifecyclePage } from './pages/principal/StudentStaffLifecyclePage';
@@ -120,8 +109,6 @@ const RoleRedirector: React.FC = () => {
       return <Navigate to="/principal" replace />;
     case UserRoleEnum.OFFICE_ADMIN:
       return <Navigate to="/office" replace />;
-    case UserRoleEnum.HOD:
-      return <Navigate to="/hod" replace />;
     case UserRoleEnum.FACULTY:
       return <Navigate to="/faculty" replace />;
     case UserRoleEnum.NON_FACULTY:
@@ -166,7 +153,6 @@ export const App: React.FC = () => {
                   allowedRoles={[
                     UserRoleEnum.SUPER_ADMIN,
                     UserRoleEnum.OFFICE_ADMIN,
-                    UserRoleEnum.HOD,
                     UserRoleEnum.FACULTY,
                   ]}
                 >
@@ -182,7 +168,6 @@ export const App: React.FC = () => {
                   allowedRoles={[
                     UserRoleEnum.SUPER_ADMIN,
                     UserRoleEnum.OFFICE_ADMIN,
-                    UserRoleEnum.HOD,
                     UserRoleEnum.FACULTY,
                   ]}
                 >
@@ -198,7 +183,6 @@ export const App: React.FC = () => {
                   allowedRoles={[
                     UserRoleEnum.SUPER_ADMIN,
                     UserRoleEnum.OFFICE_ADMIN,
-                    UserRoleEnum.HOD,
                     UserRoleEnum.FACULTY,
                   ]}
                 >
@@ -214,7 +198,6 @@ export const App: React.FC = () => {
                   allowedRoles={[
                     UserRoleEnum.SUPER_ADMIN,
                     UserRoleEnum.OFFICE_ADMIN,
-                    UserRoleEnum.HOD,
                     UserRoleEnum.FACULTY,
                   ]}
                 >
@@ -261,14 +244,6 @@ export const App: React.FC = () => {
               element={
                 <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN]}>
                   <FeeManagement />
-                </RoleGate>
-              }
-            />
-            <Route
-              path="principal/departments"
-              element={
-                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN]}>
-                  <DepartmentManagement />
                 </RoleGate>
               }
             />
@@ -342,7 +317,7 @@ export const App: React.FC = () => {
               path="office/academic"
               element={
                 <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.OFFICE_ADMIN]}>
-                  <DepartmentManagement />
+                  <AcademicStructurePage />
                 </RoleGate>
               }
             />
@@ -375,72 +350,6 @@ export const App: React.FC = () => {
               element={
                 <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.OFFICE_ADMIN]}>
                   <PrincipalAttendance />
-                </RoleGate>
-              }
-            />
-
-            {/* HOD Routes */}
-            <Route
-              path="hod"
-              element={
-                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.HOD]}>
-                  <HodDashboard />
-                </RoleGate>
-              }
-            />
-            <Route
-              path="hod/faculty"
-              element={
-                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.HOD]}>
-                  <DepartmentFaculty />
-                </RoleGate>
-              }
-            />
-            <Route
-              path="hod/students"
-              element={
-                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.HOD]}>
-                  <DepartmentStudents />
-                </RoleGate>
-              }
-            />
-            <Route
-              path="hod/approvals"
-              element={
-                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.HOD]}>
-                  <DepartmentApprovals />
-                </RoleGate>
-              }
-            />
-            <Route
-              path="hod/timetable"
-              element={
-                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.HOD]}>
-                  <DepartmentTimetable />
-                </RoleGate>
-              }
-            />
-            <Route
-              path="hod/reports"
-              element={
-                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.HOD]}>
-                  <DepartmentReports />
-                </RoleGate>
-              }
-            />
-            <Route
-              path="hod/attendance"
-              element={
-                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.HOD]}>
-                  <PrincipalAttendance />
-                </RoleGate>
-              }
-            />
-            <Route
-              path="hod/corrections"
-              element={
-                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.HOD]}>
-                  <AttendanceCorrectionHub />
                 </RoleGate>
               }
             />
@@ -483,14 +392,6 @@ export const App: React.FC = () => {
               element={
                 <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.FACULTY]}>
                   <TimetableManagement />
-                </RoleGate>
-              }
-            />
-            <Route
-              path="faculty/classes"
-              element={
-                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.FACULTY]}>
-                  <DepartmentManagement />
                 </RoleGate>
               }
             />
@@ -560,7 +461,8 @@ export const App: React.FC = () => {
                 </RoleGate>
               }
             />
-            {/* Phase 10 Communication & Notification Platform Routes */}
+
+            {/* Communication & Notification Platform Routes */}
             <Route path="communication/notices" element={<NoticeBoard />} />
             <Route path="communication/notifications" element={<NotificationCenter />} />
             <Route
@@ -572,14 +474,15 @@ export const App: React.FC = () => {
               }
             />
 
-            {/* Phase 12 Examination & Results Routes */}
+            {/* Examination & Results Routes */}
             <Route path="examinations" element={<ExamManagement />} />
             <Route path="examinations/marks-entry" element={<FacultyMarksEntry />} />
             <Route path="examinations/verification" element={<MarksVerificationHub />} />
             <Route path="examinations/results-hub" element={<ResultPublicationHub />} />
             <Route path="results" element={<StudentResultView />} />
             <Route path="academic-performance" element={<AcademicPerformanceDashboard />} />
-            {/* Phase 13 Student & Guardian Portal Routes */}
+
+            {/* Student & Guardian Portal Routes */}
             <Route path="student/dashboard" element={<StudentDashboard />} />
             <Route path="student/attendance" element={<StudentAttendanceView />} />
             <Route path="student/assignments" element={<StudentAssignmentsView />} />
@@ -587,15 +490,7 @@ export const App: React.FC = () => {
             <Route path="guardian/dashboard" element={<GuardianDashboard />} />
             <Route path="guardian/preferences" element={<GuardianPreferences />} />
 
-            {/* Phase 15 Institutional Integration, Operations & Helpdesk Routes */}
-            <Route
-              path="principal/go-live"
-              element={
-                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN]}>
-                  <GoLiveReadiness />
-                </RoleGate>
-              }
-            />
+            {/* Institutional Operations & Support */}
             <Route
               path="principal/report-center"
               element={
@@ -639,18 +534,18 @@ export const App: React.FC = () => {
             <Route
               path="reports"
               element={
-                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.OFFICE_ADMIN, UserRoleEnum.HOD]}>
+                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.OFFICE_ADMIN]}>
                   <ReportCenter />
                 </RoleGate>
               }
             />
             <Route path="support" element={<SupportTicketPage />} />
 
-            {/* Phase 16 Smart Operations, Real-Time & Mobile Routes */}
+            {/* Smart Operations & Mobile */}
             <Route
               path="principal/insights"
               element={
-                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.OFFICE_ADMIN, UserRoleEnum.HOD]}>
+                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.OFFICE_ADMIN]}>
                   <SmartInsightsHub />
                 </RoleGate>
               }
@@ -666,7 +561,7 @@ export const App: React.FC = () => {
             <Route
               path="principal/cases"
               element={
-                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.OFFICE_ADMIN, UserRoleEnum.HOD, UserRoleEnum.FACULTY]}>
+                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.OFFICE_ADMIN, UserRoleEnum.FACULTY]}>
                   <StudentCaseManagement />
                 </RoleGate>
               }
@@ -676,22 +571,6 @@ export const App: React.FC = () => {
               element={
                 <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.OFFICE_ADMIN, UserRoleEnum.NON_FACULTY]}>
                   <SmartCampusOperations />
-                </RoleGate>
-              }
-            />
-            <Route
-              path="principal/diagnostics"
-              element={
-                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.OFFICE_ADMIN]}>
-                  <SystemDiagnosticsPage />
-                </RoleGate>
-              }
-            />
-            <Route
-              path="principal/feature-flags"
-              element={
-                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN]}>
-                  <FeatureFlagsPage />
                 </RoleGate>
               }
             />
@@ -712,11 +591,11 @@ export const App: React.FC = () => {
               }
             />
 
-            {/* Phase 17 Institutional Intelligence & Operations Routes */}
+            {/* Institutional Intelligence & Lifecycle */}
             <Route
               path="principal/calendar"
               element={
-                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.OFFICE_ADMIN, UserRoleEnum.HOD, UserRoleEnum.FACULTY]}>
+                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.OFFICE_ADMIN, UserRoleEnum.FACULTY]}>
                   <InstitutionalCalendarPage />
                 </RoleGate>
               }
@@ -740,7 +619,7 @@ export const App: React.FC = () => {
             <Route
               path="principal/assets"
               element={
-                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.OFFICE_ADMIN, UserRoleEnum.HOD]}>
+                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.OFFICE_ADMIN]}>
                   <AssetInventoryPage />
                 </RoleGate>
               }
@@ -748,7 +627,7 @@ export const App: React.FC = () => {
             <Route
               path="principal/compliance"
               element={
-                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.OFFICE_ADMIN, UserRoleEnum.HOD]}>
+                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.OFFICE_ADMIN]}>
                   <CompliancePolicyCenter />
                 </RoleGate>
               }
@@ -764,7 +643,7 @@ export const App: React.FC = () => {
             <Route
               path="principal/intelligence"
               element={
-                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.OFFICE_ADMIN, UserRoleEnum.HOD]}>
+                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.OFFICE_ADMIN]}>
                   <OperationsIntelligenceHub />
                 </RoleGate>
               }
@@ -780,7 +659,7 @@ export const App: React.FC = () => {
             <Route
               path="faculty/ptm"
               element={
-                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.FACULTY, UserRoleEnum.HOD]}>
+                <RoleGate allowedRoles={[UserRoleEnum.SUPER_ADMIN, UserRoleEnum.FACULTY]}>
                   <FacultyPtmManagement />
                 </RoleGate>
               }

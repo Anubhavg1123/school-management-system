@@ -12,7 +12,7 @@ class RegistrationService {
         const skip = (page - 1) * limit;
         const where = {
             status: query.includeUnderReview !== false
-                ? { in: [types_1.RegistrationStatusEnum.PENDING, types_1.RegistrationStatusEnum.UNDER_REVIEW] }
+                ? { in: [types_1.RegistrationStatusEnum.PENDING, types_1.RegistrationStatusEnum.UNDER_REVIEW, types_1.RegistrationStatusEnum.APPROVED_PENDING_ROLE] }
                 : types_1.RegistrationStatusEnum.PENDING,
         };
         if (query.roleId)
@@ -42,7 +42,14 @@ class RegistrationService {
                             emergencyContactName: true,
                             emergencyContactPhone: true,
                             userCategory: true,
+                            status: true,
+                            activeRole: true,
                             createdAt: true,
+                            userRoles: {
+                                include: {
+                                    role: true,
+                                },
+                            },
                         },
                     },
                     requestedRole: true,
@@ -81,9 +88,16 @@ class RegistrationService {
                         emergencyContactName: true,
                         emergencyContactPhone: true,
                         userCategory: true,
+                        status: true,
+                        activeRole: true,
                         idProofType: true,
                         idProofNumber: true,
                         createdAt: true,
+                        userRoles: {
+                            include: {
+                                role: true,
+                            },
+                        },
                     },
                 },
                 requestedRole: true,
@@ -155,106 +169,205 @@ class RegistrationService {
         if (!reg) {
             throw new errorHandler_1.AppError('Registration request not found.', 404, 'REGISTRATION_NOT_FOUND');
         }
-        if (reg.status === types_1.RegistrationStatusEnum.APPROVED || reg.status === types_1.RegistrationStatusEnum.REJECTED) {
-            throw new errorHandler_1.AppError(`Registration request is already ${reg.status.toLowerCase()}.`, 400, 'ALREADY_PROCESSED');
+        if (reg.status === types_1.RegistrationStatusEnum.REJECTED) {
+            throw new errorHandler_1.AppError('Cannot approve a rejected registration request.', 400, 'ALREADY_PROCESSED');
         }
         const deptId = params.departmentId || reg.departmentId || null;
-        const roleName = reg.requestedRole.name;
+        const targetRoleName = params.role || reg.requestedRole?.name || null;
+        // CASE A: Role is provided -> Approve & Activate Account immediately
+        if (targetRoleName) {
+            const targetRole = await prisma_1.prisma.role.findUnique({ where: { name: targetRoleName } });
+            if (!targetRole) {
+                throw new errorHandler_1.AppError(`Operational role '${targetRoleName}' is invalid.`, 400, 'INVALID_ROLE');
+            }
+            await prisma_1.prisma.$transaction(async (tx) => {
+                // 1. Update Registration Request
+                await tx.registrationRequest.update({
+                    where: { id: reg.id },
+                    data: {
+                        status: types_1.RegistrationStatusEnum.APPROVED,
+                        departmentId: deptId,
+                        reviewerNotes: params.reviewerNotes || 'Application verified and operational role assigned.',
+                        reviewedByUserId: params.reviewerId,
+                        reviewedAt: new Date(),
+                    },
+                });
+                // 2. Create Approval Record
+                await tx.approvalRecord.create({
+                    data: {
+                        registrationId: reg.id,
+                        reviewerId: params.reviewerId,
+                        action: 'APPROVED',
+                        reason: params.reviewerNotes || `Application approved and assigned role '${targetRole.displayName}'.`,
+                    },
+                });
+                // 3. Activate User Account & set activeRole
+                await tx.user.update({
+                    where: { id: reg.userId },
+                    data: {
+                        status: types_1.UserStatusEnum.ACTIVE,
+                        activeRole: targetRoleName,
+                    },
+                });
+                // 4. Create User Role mapping
+                await tx.userRole.deleteMany({ where: { userId: reg.userId } });
+                await tx.userRole.create({
+                    data: {
+                        userId: reg.userId,
+                        roleId: targetRole.id,
+                        departmentId: deptId,
+                        isPrimary: true,
+                        assignedBy: params.reviewerId,
+                    },
+                });
+                // 5. Create specific profile records
+                const code = params.employeeOrAdmissionCode || `ID-${Date.now().toString().slice(-6)}`;
+                if (targetRoleName === types_1.UserRoleEnum.FACULTY || targetRoleName === types_1.UserRoleEnum.HOD) {
+                    let finalDeptId = deptId;
+                    if (!finalDeptId) {
+                        const firstDept = await tx.department.findFirst({ where: { status: 'ACTIVE' } });
+                        if (firstDept) {
+                            finalDeptId = firstDept.id;
+                        }
+                        else {
+                            const genDept = await tx.department.create({
+                                data: {
+                                    code: 'GEN',
+                                    name: 'General Academics',
+                                    description: 'Default institutional academic division.',
+                                    status: 'ACTIVE',
+                                },
+                            });
+                            finalDeptId = genDept.id;
+                        }
+                    }
+                    await tx.faculty.upsert({
+                        where: { userId: reg.userId },
+                        update: {
+                            departmentId: finalDeptId,
+                            designation: params.designation || (targetRoleName === types_1.UserRoleEnum.HOD ? 'HEAD_OF_DEPARTMENT' : 'ASST_PROFESSOR'),
+                            isHod: targetRoleName === types_1.UserRoleEnum.HOD,
+                            status: 'ACTIVE',
+                        },
+                        create: {
+                            userId: reg.userId,
+                            employeeCode: code,
+                            departmentId: finalDeptId,
+                            designation: params.designation || (targetRoleName === types_1.UserRoleEnum.HOD ? 'HEAD_OF_DEPARTMENT' : 'ASST_PROFESSOR'),
+                            isHod: targetRoleName === types_1.UserRoleEnum.HOD,
+                            status: 'ACTIVE',
+                        },
+                    });
+                    if (targetRoleName === types_1.UserRoleEnum.HOD && finalDeptId) {
+                        await tx.department.update({
+                            where: { id: finalDeptId },
+                            data: { hodUserId: reg.userId },
+                        });
+                    }
+                }
+                else if (targetRoleName === types_1.UserRoleEnum.NON_FACULTY || targetRoleName === types_1.UserRoleEnum.OFFICE_ADMIN) {
+                    await tx.nonFacultyStaff.upsert({
+                        where: { userId: reg.userId },
+                        update: {
+                            jobTitle: params.designation || (targetRoleName === types_1.UserRoleEnum.OFFICE_ADMIN ? 'ACADEMIC_OFFICE_ADMIN' : 'STAFF'),
+                            departmentOrUnit: deptId || (targetRoleName === types_1.UserRoleEnum.OFFICE_ADMIN ? 'ACADEMIC_OFFICE' : 'OPERATIONS'),
+                            status: 'ACTIVE',
+                        },
+                        create: {
+                            userId: reg.userId,
+                            employeeCode: code,
+                            jobTitle: params.designation || (targetRoleName === types_1.UserRoleEnum.OFFICE_ADMIN ? 'ACADEMIC_OFFICE_ADMIN' : 'STAFF'),
+                            departmentOrUnit: deptId || (targetRoleName === types_1.UserRoleEnum.OFFICE_ADMIN ? 'ACADEMIC_OFFICE' : 'OPERATIONS'),
+                            status: 'ACTIVE',
+                        },
+                    });
+                }
+                else if (targetRoleName === types_1.UserRoleEnum.STUDENT) {
+                    await tx.student.upsert({
+                        where: { userId: reg.userId },
+                        update: { status: 'ACTIVE' },
+                        create: {
+                            userId: reg.userId,
+                            admissionNumber: code,
+                            status: 'ACTIVE',
+                        },
+                    });
+                }
+                // 6. Create welcome notification
+                await tx.notification.create({
+                    data: {
+                        userId: reg.userId,
+                        title: 'Account Approved & Activated',
+                        message: `Your registration for role '${targetRole.displayName}' has been approved and activated. You may now log in to your portal.`,
+                        type: 'APPROVAL',
+                    },
+                });
+            });
+            // Audit log
+            await audit_service_1.AuditService.log({
+                userId: params.reviewerId,
+                action: 'USER_ROLE_ASSIGNED',
+                entityType: 'UserRole',
+                entityId: reg.userId,
+                beforeState: { previousRole: null, previousStatus: reg.user.status },
+                afterState: { targetUserId: reg.userId, assignedRole: targetRoleName, status: 'ACTIVE', reason: params.reviewerNotes || 'Assigned during approval' },
+                ipAddress: params.ipAddress,
+            });
+            return {
+                message: 'Registration approved and operational role assigned successfully. User account is now active.',
+                userId: reg.userId,
+                status: 'ACTIVE',
+                role: targetRoleName,
+            };
+        }
+        // CASE B: Role is NOT provided -> Set Account to APPROVED — ROLE ASSIGNMENT REQUIRED
         await prisma_1.prisma.$transaction(async (tx) => {
-            // 1. Update Registration Request
             await tx.registrationRequest.update({
                 where: { id: reg.id },
                 data: {
-                    status: types_1.RegistrationStatusEnum.APPROVED,
+                    status: types_1.RegistrationStatusEnum.APPROVED_PENDING_ROLE,
                     departmentId: deptId,
-                    reviewerNotes: params.reviewerNotes || 'Application verified and approved by authority.',
+                    reviewerNotes: params.reviewerNotes || 'Application verified; operational role assignment required.',
                     reviewedByUserId: params.reviewerId,
                     reviewedAt: new Date(),
                 },
             });
-            // 2. Create Approval Record
             await tx.approvalRecord.create({
                 data: {
                     registrationId: reg.id,
                     reviewerId: params.reviewerId,
-                    action: 'APPROVED',
-                    reason: params.reviewerNotes || 'Application verified and approved by authority.',
+                    action: 'APPROVED_PENDING_ROLE',
+                    reason: params.reviewerNotes || 'Application approved by Principal. Operational role assignment required.',
                 },
             });
-            // 3. Activate User Account
             await tx.user.update({
                 where: { id: reg.userId },
                 data: {
-                    status: types_1.UserStatusEnum.ACTIVE,
+                    status: types_1.UserStatusEnum.APPROVED_PENDING_ROLE,
                 },
             });
-            // 4. Create User Role mapping
-            await tx.userRole.create({
-                data: {
-                    userId: reg.userId,
-                    roleId: reg.requestedRoleId,
-                    departmentId: deptId,
-                    isPrimary: true,
-                    assignedBy: params.reviewerId,
-                },
-            });
-            // 5. Create specific profile records
-            const code = params.employeeOrAdmissionCode || `ID-${Date.now().toString().slice(-6)}`;
-            if (roleName === types_1.UserRoleEnum.FACULTY || roleName === types_1.UserRoleEnum.HOD) {
-                if (!deptId) {
-                    throw new errorHandler_1.AppError('Department is mandatory when approving a Faculty or HOD account.', 400, 'DEPARTMENT_REQUIRED');
-                }
-                await tx.faculty.create({
-                    data: {
-                        userId: reg.userId,
-                        employeeCode: code,
-                        departmentId: deptId,
-                        designation: params.designation || (roleName === types_1.UserRoleEnum.HOD ? 'HEAD_OF_DEPARTMENT' : 'ASST_PROFESSOR'),
-                        isHod: roleName === types_1.UserRoleEnum.HOD,
-                        status: 'ACTIVE',
-                    },
-                });
-                if (roleName === types_1.UserRoleEnum.HOD) {
-                    await tx.department.update({
-                        where: { id: deptId },
-                        data: { hodUserId: reg.userId },
-                    });
-                }
-            }
-            else if (roleName === types_1.UserRoleEnum.NON_FACULTY) {
-                await tx.nonFacultyStaff.create({
-                    data: {
-                        userId: reg.userId,
-                        employeeCode: code,
-                        jobTitle: params.designation || 'STAFF',
-                        departmentOrUnit: deptId || 'FACILITIES',
-                        status: 'ACTIVE',
-                    },
-                });
-            }
-            // 6. Create welcome notification
             await tx.notification.create({
                 data: {
                     userId: reg.userId,
-                    title: 'Account Approved',
-                    message: `Your registration for role '${reg.requestedRole.displayName}' has been approved. You may now log in to the portal.`,
+                    title: 'Application Approved — Role Assignment Pending',
+                    message: 'Your registration has been approved. An operational role must be assigned by the administrator before you can log in.',
                     type: 'APPROVAL',
                 },
             });
         });
-        // Audit log
         await audit_service_1.AuditService.log({
             userId: params.reviewerId,
-            action: 'REGISTRATION_APPROVED',
+            action: 'REGISTRATION_APPROVED_PENDING_ROLE',
             entityType: 'RegistrationRequest',
             entityId: reg.id,
-            afterState: { userId: reg.userId, role: roleName, deptId },
+            afterState: { targetUserId: reg.userId, status: types_1.UserStatusEnum.APPROVED_PENDING_ROLE },
             ipAddress: params.ipAddress,
         });
         return {
-            message: 'Registration approved successfully. User account is now active.',
+            message: 'Registration approved. User account is set to APPROVED — ROLE ASSIGNMENT REQUIRED. Please assign an operational role to activate the account.',
             userId: reg.userId,
-            status: 'ACTIVE',
+            status: types_1.UserStatusEnum.APPROVED_PENDING_ROLE,
+            roleAssigned: false,
         };
     }
     static async rejectRegistration(params) {

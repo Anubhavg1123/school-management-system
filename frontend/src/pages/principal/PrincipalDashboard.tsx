@@ -217,9 +217,9 @@ export const PrincipalDashboard: React.FC = () => {
           {activeTab === 'academic' && (
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
               <div className="p-4 bg-gray-50 rounded-lg">
-                <p className="text-gray-500 font-medium">Departments & Classes</p>
+                <p className="text-gray-500 font-medium">School Classes & Sections</p>
                 <p className="text-xl font-bold text-gray-800 mt-1">
-                  {executiveSummary?.academic?.departmentStrength} Depts / {executiveSummary?.academic?.classStrength} Classes
+                  {executiveSummary?.academic?.classStrength || 0} Classes (Class 1–10)
                 </p>
               </div>
               <div className="p-4 bg-gray-50 rounded-lg">
@@ -319,38 +319,34 @@ export const PrincipalDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Department Overview & Comparison Table */}
+      {/* School Class & Academic Structure Overview */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-        <h3 className="text-lg font-bold text-gray-900 mb-4">Department Strength & Performance Drill-Down</h3>
+        <h3 className="text-lg font-bold text-gray-900 mb-4">School Class & Section Performance Overview (Classes 1–10)</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm border-collapse">
             <thead>
               <tr className="bg-gray-50 text-gray-600 border-b">
-                <th className="py-3 px-4">Dept Code</th>
-                <th className="py-3 px-4">Department Name</th>
-                <th className="py-3 px-4">HOD Name</th>
-                <th className="py-3 px-4">Faculty Strength</th>
-                <th className="py-3 px-4">Student Strength</th>
-                <th className="py-3 px-4">Classes</th>
-                <th className="py-3 px-4">Status</th>
+                <th className="py-3 px-4">Class Standard</th>
+                <th className="py-3 px-4">Code</th>
+                <th className="py-3 px-4">Sections</th>
+                <th className="py-3 px-4">Enrolled Students</th>
+                <th className="py-3 px-4">Active Status</th>
               </tr>
             </thead>
             <tbody>
               {departments.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-gray-400">
-                    No academic departments registered yet. Use Academic Leadership to configure departments.
+                  <td colSpan={5} className="py-8 text-center text-gray-400">
+                    No active school classes registered yet. Create classes in Academic Structure as admissions begin.
                   </td>
                 </tr>
               ) : (
                 departments.map((d) => (
                   <tr key={d.id} className="border-b hover:bg-gray-50 transition">
-                    <td className="py-3 px-4 font-semibold text-indigo-600">{d.code}</td>
-                    <td className="py-3 px-4 font-medium text-gray-900">{d.name}</td>
-                    <td className="py-3 px-4 text-gray-700">{d.hodName || 'Unassigned'}</td>
-                    <td className="py-3 px-4 text-gray-700">{d.facultyCount || 0}</td>
-                    <td className="py-3 px-4 text-gray-700">{d.studentCount || 0}</td>
-                    <td className="py-3 px-4 text-gray-700">{d.classCount || 0}</td>
+                    <td className="py-3 px-4 font-semibold text-indigo-600">{d.name}</td>
+                    <td className="py-3 px-4 text-gray-700">{d.code}</td>
+                    <td className="py-3 px-4 text-gray-700">{d.classCount || d.sectionsCount || 1} Sections</td>
+                    <td className="py-3 px-4 text-gray-700 font-medium">{d.studentCount || 0} Students</td>
                     <td className="py-3 px-4">
                       <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700">
                         {d.status || 'ACTIVE'}

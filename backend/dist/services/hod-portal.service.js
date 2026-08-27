@@ -197,9 +197,9 @@ class HodPortalService {
                 id: t.id,
                 className: t.class.name,
                 sectionName: t.section.name,
-                subjectName: t.subject.name,
-                facultyName: `${t.faculty.user.firstName} ${t.faculty.user.lastName}`,
-                room: t.room.roomNumber,
+                subjectName: t.subject?.name || 'Unassigned',
+                facultyName: t.faculty ? `${t.faculty.user.firstName} ${t.faculty.user.lastName}` : 'Unassigned',
+                room: t.room?.roomNumber || 'N/A',
                 period: t.timeSlot.name,
                 startTime: t.timeSlot.startTime,
                 endTime: t.timeSlot.endTime,
@@ -1018,7 +1018,8 @@ class HodPortalService {
             include: { faculty: { include: { user: true } } },
         });
         if (facConflict) {
-            throw new errorHandler_1.AppError(`Conflict: Faculty ${facConflict.faculty.user.firstName} ${facConflict.faculty.user.lastName} is already assigned at this time.`, 409);
+            const facName = facConflict.faculty?.user ? `${facConflict.faculty.user.firstName} ${facConflict.faculty.user.lastName}` : 'Assigned faculty';
+            throw new errorHandler_1.AppError(`Conflict: Faculty ${facName} is already assigned at this time.`, 409);
         }
         // 2. Room Conflict
         const roomConflict = await prisma.timetableEntry.findFirst({
@@ -1031,7 +1032,8 @@ class HodPortalService {
             include: { room: true },
         });
         if (roomConflict) {
-            throw new errorHandler_1.AppError(`Conflict: Room ${roomConflict.room.roomNumber} is already booked at this time.`, 409);
+            const roomNum = roomConflict.room?.roomNumber || 'Selected room';
+            throw new errorHandler_1.AppError(`Conflict: Room ${roomNum} is already booked at this time.`, 409);
         }
         // 3. Section Conflict
         const secConflict = await prisma.timetableEntry.findFirst({

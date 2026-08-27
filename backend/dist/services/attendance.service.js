@@ -32,15 +32,9 @@ class AttendanceService {
         if (existing && existing.checkInTime) {
             throw new errorHandler_1.AppError('Check-in already recorded for today.', 400, 'ALREADY_CHECKED_IN');
         }
-        // Determine Late Status (Standard start time 09:15 AM)
-        const standardStart = new Date();
-        standardStart.setHours(9, 15, 0, 0);
-        let status = types_1.AttendanceStatusEnum.PRESENT;
-        let lateMinutes = 0;
-        if (now > standardStart) {
-            status = types_1.AttendanceStatusEnum.LATE;
-            lateMinutes = Math.max(0, Math.floor((now.getTime() - standardStart.getTime()) / 60000));
-        }
+        // Standard check-in records PRESENT
+        const status = types_1.AttendanceStatusEnum.PRESENT;
+        const lateMinutes = 0;
         const attendance = await prisma_1.prisma.attendance.upsert({
             where: {
                 userId_date: {

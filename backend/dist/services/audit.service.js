@@ -6,9 +6,15 @@ const logger_1 = require("../utils/logger");
 class AuditService {
     static async log(params) {
         try {
+            let validUserId = null;
+            if (params.userId) {
+                const user = await prisma_1.prisma.user.findUnique({ where: { id: params.userId }, select: { id: true } });
+                if (user)
+                    validUserId = user.id;
+            }
             return await prisma_1.prisma.auditLog.create({
                 data: {
-                    userId: params.userId || null,
+                    userId: validUserId,
                     action: params.action,
                     entityType: params.entityType,
                     entityId: params.entityId ? String(params.entityId) : null,

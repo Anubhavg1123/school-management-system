@@ -208,7 +208,7 @@ export class RegistrationService {
     }
 
     const deptId = params.departmentId || reg.departmentId || null;
-    const targetRoleName = params.role || null;
+    const targetRoleName = params.role || reg.requestedRole?.name || null;
 
     // CASE A: Role is provided -> Approve & Activate Account immediately
     if (targetRoleName) {
