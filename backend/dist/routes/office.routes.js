@@ -1,0 +1,17 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.officeRouter = void 0;
+const express_1 = require("express");
+const auth_1 = require("../middleware/auth");
+const rbac_1 = require("../middleware/rbac");
+const office_controller_1 = require("../controllers/office.controller");
+const types_1 = require("../types");
+exports.officeRouter = (0, express_1.Router)();
+exports.officeRouter.use(auth_1.requireAuth);
+exports.officeRouter.use((0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN]));
+exports.officeRouter.get('/dashboard', (req, res, next) => office_controller_1.OfficeController.getOfficeDashboard(req, res).catch(next));
+exports.officeRouter.post('/students/master', (req, res, next) => office_controller_1.OfficeController.createStudentMaster(req, res).catch(next));
+exports.officeRouter.patch('/students/:id/status', (req, res, next) => office_controller_1.OfficeController.updateStudentStatus(req, res).catch(next));
+exports.officeRouter.post('/students/:id/documents', (req, res, next) => office_controller_1.OfficeController.uploadDocument(req, res).catch(next));
+exports.officeRouter.post('/finance/payment', (req, res, next) => office_controller_1.OfficeController.recordFeePayment(req, res).catch(next));
+exports.default = exports.officeRouter;

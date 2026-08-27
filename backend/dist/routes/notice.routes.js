@@ -1,0 +1,16 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.noticeRouter = void 0;
+const express_1 = require("express");
+const auth_1 = require("../middleware/auth");
+const rbac_1 = require("../middleware/rbac");
+const notice_controller_1 = require("../controllers/notice.controller");
+const types_1 = require("../types");
+exports.noticeRouter = (0, express_1.Router)();
+exports.noticeRouter.use(auth_1.requireAuth);
+exports.noticeRouter.get('/', (req, res, next) => notice_controller_1.NoticeController.getNoticesForUser(req, res).catch(next));
+exports.noticeRouter.get('/recipient-estimate', (req, res, next) => notice_controller_1.NoticeController.estimateRecipientCount(req, res).catch(next));
+exports.noticeRouter.post('/', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN, types_1.UserRoleEnum.HOD, types_1.UserRoleEnum.FACULTY]), (req, res, next) => notice_controller_1.NoticeController.createNotice(req, res).catch(next));
+exports.noticeRouter.post('/:id/acknowledge', (req, res, next) => notice_controller_1.NoticeController.acknowledgeNotice(req, res).catch(next));
+exports.noticeRouter.post('/process-scheduler', (req, res, next) => notice_controller_1.NoticeController.processScheduler(req, res).catch(next));
+exports.default = exports.noticeRouter;

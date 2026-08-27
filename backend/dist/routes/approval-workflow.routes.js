@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.approvalWorkflowRouter = void 0;
+const express_1 = require("express");
+const auth_1 = require("../middleware/auth");
+const rbac_1 = require("../middleware/rbac");
+const approval_workflow_controller_1 = require("../controllers/approval-workflow.controller");
+const types_1 = require("../types");
+exports.approvalWorkflowRouter = (0, express_1.Router)();
+exports.approvalWorkflowRouter.use(auth_1.requireAuth);
+exports.approvalWorkflowRouter.get('/pending', (req, res, next) => approval_workflow_controller_1.ApprovalWorkflowController.getPendingApprovals(req, res).catch(next));
+exports.approvalWorkflowRouter.post('/request', (req, res, next) => approval_workflow_controller_1.ApprovalWorkflowController.createRequest(req, res).catch(next));
+exports.approvalWorkflowRouter.post('/:id/review', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN, types_1.UserRoleEnum.HOD]), (req, res, next) => approval_workflow_controller_1.ApprovalWorkflowController.reviewRequest(req, res).catch(next));
+exports.default = exports.approvalWorkflowRouter;

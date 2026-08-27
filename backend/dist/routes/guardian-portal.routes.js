@@ -1,0 +1,15 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const auth_1 = require("../middleware/auth");
+const rbac_1 = require("../middleware/rbac");
+const guardian_portal_controller_1 = require("../controllers/guardian-portal.controller");
+const router = (0, express_1.Router)();
+router.use(auth_1.requireAuth);
+router.use((0, rbac_1.requireRoles)(['PARENT', 'SUPER_ADMIN']));
+router.get('/dashboard', guardian_portal_controller_1.getGuardianDashboard);
+router.get('/children', guardian_portal_controller_1.getLinkedWards);
+router.get('/children/:studentId/results', guardian_portal_controller_1.getWardResults);
+router.get('/children/:studentId/fees', guardian_portal_controller_1.getWardFees);
+router.put('/preferences', guardian_portal_controller_1.updatePreferences);
+exports.default = router;

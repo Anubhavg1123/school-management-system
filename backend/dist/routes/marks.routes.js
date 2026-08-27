@@ -1,0 +1,15 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.marksRouter = void 0;
+const express_1 = require("express");
+const auth_1 = require("../middleware/auth");
+const rbac_1 = require("../middleware/rbac");
+const marks_controller_1 = require("../controllers/marks.controller");
+const types_1 = require("../types");
+exports.marksRouter = (0, express_1.Router)();
+exports.marksRouter.use(auth_1.requireAuth);
+exports.marksRouter.post('/submit-batch', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.HOD, types_1.UserRoleEnum.FACULTY]), (req, res, next) => marks_controller_1.MarksController.submitMarks(req, res).catch(next));
+exports.marksRouter.post('/verify/:subjectId', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN, types_1.UserRoleEnum.HOD]), (req, res, next) => marks_controller_1.MarksController.verifyMarks(req, res).catch(next));
+exports.marksRouter.post('/corrections/request', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.HOD, types_1.UserRoleEnum.FACULTY]), (req, res, next) => marks_controller_1.MarksController.requestCorrection(req, res).catch(next));
+exports.marksRouter.post('/corrections/:id/review', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN, types_1.UserRoleEnum.HOD]), (req, res, next) => marks_controller_1.MarksController.reviewCorrection(req, res).catch(next));
+exports.default = exports.marksRouter;

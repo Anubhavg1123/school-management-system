@@ -1,0 +1,15 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.permissionRouter = void 0;
+const express_1 = require("express");
+const auth_1 = require("../middleware/auth");
+const rbac_1 = require("../middleware/rbac");
+const permission_controller_1 = require("../controllers/permission.controller");
+const types_1 = require("../types");
+exports.permissionRouter = (0, express_1.Router)();
+exports.permissionRouter.use(auth_1.requireAuth);
+exports.permissionRouter.get('/my-permissions', (req, res, next) => permission_controller_1.PermissionController.getUserPermissions(req, res).catch(next));
+exports.permissionRouter.post('/assign-role', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN]), (req, res, next) => permission_controller_1.PermissionController.assignUserRole(req, res).catch(next));
+exports.permissionRouter.post('/users/:id/suspend', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN]), (req, res, next) => permission_controller_1.PermissionController.suspendUser(req, res).catch(next));
+exports.permissionRouter.post('/users/:id/activate', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN]), (req, res, next) => permission_controller_1.PermissionController.activateUser(req, res).catch(next));
+exports.default = exports.permissionRouter;

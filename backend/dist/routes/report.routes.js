@@ -1,0 +1,22 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const report_controller_1 = require("../controllers/report.controller");
+const auth_1 = require("../middleware/auth");
+const rbac_1 = require("../middleware/rbac");
+const types_1 = require("../types");
+const router = (0, express_1.Router)();
+router.use(auth_1.requireAuth);
+router.get('/students/roster', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN, types_1.UserRoleEnum.HOD, types_1.UserRoleEnum.FACULTY]), report_controller_1.ReportController.getStudentRoster);
+router.get('/classes', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN, types_1.UserRoleEnum.HOD, types_1.UserRoleEnum.FACULTY]), report_controller_1.ReportController.getClassWise);
+router.get('/departments', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN, types_1.UserRoleEnum.HOD]), report_controller_1.ReportController.getDepartmentWise);
+router.get('/transfers', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN, types_1.UserRoleEnum.HOD]), report_controller_1.ReportController.getTransfers);
+router.get('/admissions', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN]), report_controller_1.ReportController.getAdmissions);
+// ===== PHASE 15: EXTENDED REPORTS =====
+router.get('/attendance', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN, types_1.UserRoleEnum.HOD, types_1.UserRoleEnum.FACULTY]), report_controller_1.ReportController.getAttendanceReport);
+router.get('/finance', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN]), report_controller_1.ReportController.getFinanceReport);
+router.get('/examinations', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN, types_1.UserRoleEnum.HOD]), report_controller_1.ReportController.getExaminationReport);
+router.get('/staff', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN, types_1.UserRoleEnum.HOD]), report_controller_1.ReportController.getStaffReport);
+router.get('/visitors', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN, types_1.UserRoleEnum.OFFICE_ADMIN]), report_controller_1.ReportController.getVisitorReport);
+router.get('/audit', (0, rbac_1.requireRoles)([types_1.UserRoleEnum.SUPER_ADMIN]), report_controller_1.ReportController.getAuditReport);
+exports.default = router;

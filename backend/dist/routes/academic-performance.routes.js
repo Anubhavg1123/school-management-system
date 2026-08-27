@@ -1,0 +1,11 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.academicPerformanceRouter = void 0;
+const express_1 = require("express");
+const auth_1 = require("../middleware/auth");
+const academic_performance_controller_1 = require("../controllers/academic-performance.controller");
+exports.academicPerformanceRouter = (0, express_1.Router)();
+exports.academicPerformanceRouter.use(auth_1.requireAuth);
+exports.academicPerformanceRouter.get('/students/:studentId/trend', (req, res, next) => academic_performance_controller_1.AcademicPerformanceController.getStudentTrend(req, res).catch(next));
+exports.academicPerformanceRouter.get('/classes/:classId', (req, res, next) => academic_performance_controller_1.AcademicPerformanceController.getClassPerformance(req, res).catch(next));
+exports.default = exports.academicPerformanceRouter;
