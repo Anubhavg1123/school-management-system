@@ -4,6 +4,7 @@
   "private": true,
   "description": "Production School/College Management System - Phase 1 Foundation",
   "scripts": {
+    "build": "cd frontend && npm install && npm run build",
     "backend:dev": "npm --prefix backend run dev",
     "backend:build": "npm --prefix backend run build",
     "backend:start": "npm --prefix backend run start",
