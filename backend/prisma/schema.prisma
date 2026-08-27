@@ -856,8 +856,8 @@ model FeeCategory {
 
 model FeeStructure {
   id             String   @id @default(cuid())
-  code           String   @unique // e.g. FS-2026-GR10, FS-2026-BTECH-CS
-  name           String   // e.g. Grade 10 Standard Annual Fee Structure 2026-27
+  code           String   @unique // e.g. FS-2026-CLASS10, FS-2026-CLASS1
+  name           String   // e.g. Class 10 Standard Annual Fee Structure 2026-27
   academicYearId String
   classId        String?
   departmentId   String?

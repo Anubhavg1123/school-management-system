@@ -260,9 +260,9 @@ async function main() {
     {
       category: 'GENERAL',
       key: 'institution_name',
-      value: 'St. Lawrence Academy of Higher Education',
+      value: 'St. Lawrence Public School',
       isPublic: true,
-      description: 'Official name of the school or college.',
+      description: 'Official name of the school.',
     },
     {
       category: 'GENERAL',
