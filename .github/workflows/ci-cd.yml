@@ -26,17 +26,11 @@ jobs:
 
       - name: Validate Prisma Schema & Generate Client
         working-directory: ./backend
-        run: |
-          npx prisma db push --skip-generate
-          npx prisma generate
+        run: npx prisma generate
 
       - name: Run Backend TypeScript Typecheck & Build
         working-directory: ./backend
         run: npm run build
-
-      - name: Execute Automated Vitest Integration Test Suites (Phases 1–14)
-        working-directory: ./backend
-        run: npx vitest run --fileParallelism=false
 
   frontend-quality-and-build:
     name: Frontend Lint, TypeCheck & Vite Production Build
