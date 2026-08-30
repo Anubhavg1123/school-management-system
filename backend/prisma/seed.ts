@@ -339,11 +339,24 @@ async function main() {
   console.log('✅ System settings seeded.');
 
   // 6. Initial Super Administrator Account (Principal)
-  const adminEmail = process.env.INITIAL_ADMIN_EMAIL || 'principal@school.edu';
-  const adminUsername = process.env.INITIAL_ADMIN_USERNAME || 'principal';
+  const adminEmail = process.env.INITIAL_ADMIN_EMAIL || 'anubhavgoraguddi@gmail.com';
+  const adminUsername = process.env.INITIAL_ADMIN_USERNAME || 'anubhavgoraguddi';
   const adminPassword = process.env.INITIAL_ADMIN_PASSWORD || 'Anubhavg@2006';
-  const adminFirstName = process.env.INITIAL_ADMIN_FIRSTNAME || 'Arthur';
-  const adminLastName = process.env.INITIAL_ADMIN_LASTNAME || 'Pendleton';
+  const adminFirstName = process.env.INITIAL_ADMIN_FIRSTNAME || 'Anubhav';
+  const adminLastName = process.env.INITIAL_ADMIN_LASTNAME || 'Goraguddi';
+
+  // Remove legacy demo principal if present
+  try {
+    await prisma.user.deleteMany({
+      where: {
+        email: {
+          in: ['principal@school.edu', 'facultya@school.edu', 'alan.turing@student.edu'],
+        },
+      },
+    });
+  } catch (e) {
+    // ignore
+  }
 
   const passwordHash = await bcrypt.hash(adminPassword, 12);
 
@@ -357,7 +370,7 @@ async function main() {
       firstName: adminFirstName,
       lastName: adminLastName,
       userCategory: 'ADMINISTRATIVE',
-      whatsAppNumber: '+1-555-0100',
+      whatsAppNumber: '+919876543210',
     },
     create: {
       email: adminEmail,
@@ -368,7 +381,7 @@ async function main() {
       status: 'ACTIVE',
       activeRole: 'SUPER_ADMIN',
       userCategory: 'ADMINISTRATIVE',
-      whatsAppNumber: '+1-555-0100',
+      whatsAppNumber: '+919876543210',
     },
   });
 

@@ -4,10 +4,10 @@
   "private": true,
   "description": "Production School Management System",
   "scripts": {
-    "build": "npm --prefix frontend install --include=dev && npm --prefix frontend run build",
-    "frontend:build": "npm --prefix frontend run build",
-    "frontend:dev": "npm --prefix frontend run dev",
-    "backend:build": "npm --prefix backend run build",
-    "backend:dev": "npm --prefix backend run dev"
+    "build": "cd frontend && npm install --include=dev && npm run build",
+    "frontend:build": "cd frontend && npm run build",
+    "frontend:dev": "cd frontend && npm run dev",
+    "backend:build": "cd backend && npm run build",
+    "backend:dev": "cd backend && npm run dev"
   }
 }
