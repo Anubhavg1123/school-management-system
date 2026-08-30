@@ -10,6 +10,9 @@ jobs:
   backend-quality-and-tests:
     name: Backend Lint, TypeCheck & Automated Tests
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: "postgresql://postgres:postgres@localhost:5432/school_db?schema=public"
+      JWT_SECRET: "test-jwt-secret-key-12345"
     steps:
       - uses: actions/checkout@v4
 
@@ -17,8 +20,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: 'backend/package-lock.json'
 
       - name: Install Backend Dependencies
         working-directory: ./backend
@@ -42,8 +43,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
-          cache-dependency-path: 'frontend/package-lock.json'
 
       - name: Install Frontend Dependencies
         working-directory: ./frontend
@@ -51,7 +50,7 @@ jobs:
 
       - name: Build Frontend for Production (Vite)
         working-directory: ./frontend
-        run: npm run build
+        run: npx vite build
 
   security-audit:
     name: Dependency & Security Vulnerability Scan
