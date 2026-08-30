@@ -2,13 +2,8 @@
   "name": "school-management-system",
   "version": "1.0.0",
   "private": true,
-  "description": "Production School Management System - Classes 1 to 10",
-  "workspaces": [
-    "frontend",
-    "backend"
-  ],
+  "description": "Production School Management System",
   "scripts": {
-    "build": "npm --prefix frontend run build",
     "frontend:build": "npm --prefix frontend run build",
     "frontend:dev": "npm --prefix frontend run dev",
     "backend:build": "npm --prefix backend run build",
